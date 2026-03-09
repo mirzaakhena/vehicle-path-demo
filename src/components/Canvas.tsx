@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import type { Line, Point, BezierCurve, TangentMode } from 'vehicle-path2/core'
-import { createBezierCurve, getLineLength, distance as libDistance, calculateInitialFrontPosition } from 'vehicle-path2/core'
+import { createBezierCurve, getLineLength, distance as libDistance, calculateInitialAxlePositions } from 'vehicle-path2/core'
 import type { Mode, StoredCurve, PlacedVehicle } from '../types'
 import { projectPointOnLine, getPointAtOffset } from '../geometry'
 
@@ -55,8 +55,8 @@ interface CurveDrag {
 
 interface VehicleHover {
   lineId: string
-  rear:  { offset: number; position: Point }
-  front: { offset: number; position: Point }
+  axles: Array<{ offset: number; position: Point }>
+  axleSpacings: number[]
 }
 
 // ─── Props ───────────────────────────────────────────────────────────────────
@@ -66,7 +66,7 @@ interface Props {
   curves: StoredCurve[]
   vehicles: PlacedVehicle[]
   mode: Mode
-  wheelbase: number
+  maxWheelbase: number
   tangentMode: TangentMode
   onLineAdd: (line: Line) => void
   onCurveAdd: (curve: StoredCurve) => void
@@ -136,7 +136,7 @@ export function Canvas({
   curves,
   vehicles,
   mode,
-  wheelbase,
+  maxWheelbase,
   tangentMode,
   onLineAdd,
   onCurveAdd,
@@ -149,7 +149,7 @@ export function Canvas({
   // Always-fresh refs for use in event handlers (avoids stale closures)
   const linesRef        = useRef(lines);        linesRef.current        = lines
   const curvesRef       = useRef(curves);       curvesRef.current       = curves
-  const wheelbaseRef    = useRef(wheelbase);    wheelbaseRef.current    = wheelbase
+  const maxWheelbaseRef = useRef(maxWheelbase); maxWheelbaseRef.current = maxWheelbase
   const tangentModeRef  = useRef(tangentMode);  tangentModeRef.current  = tangentMode
 
   // ── State ─────────────────────────────────────────────────────────────────
@@ -202,7 +202,7 @@ export function Canvas({
    * - As TO   line: toOffset + wheelbase <= lineLength → min = max(toOffsets + wb)
    */
   function computeMinLineLength(lineId: string): number {
-    const wb = wheelbaseRef.current
+    const wb = maxWheelbaseRef.current
     let min = 5  // always allow at least 5px
     for (const curve of curvesRef.current) {
       if (curve.fromLineId === lineId) {
@@ -311,7 +311,7 @@ export function Canvas({
       const hit = findLineHit(mouse)
       if (hit) {
         const len = getLineLength(hit.line)
-        const wb  = wheelbaseRef.current
+        const wb  = maxWheelbaseRef.current
         if (hit.offset >= wb && hit.offset <= len) {
           setCurveDrag({
             fromLineId: hit.line.id,
@@ -329,8 +329,8 @@ export function Canvas({
     if (mode === 'vehicle' && vehicleHover) {
       onVehicleAdd({
         id: nextVehicleId(),
-        rear:  { lineId: vehicleHover.lineId, offset: vehicleHover.rear.offset,  position: vehicleHover.rear.position  },
-        front: { lineId: vehicleHover.lineId, offset: vehicleHover.front.offset, position: vehicleHover.front.position },
+        axles: vehicleHover.axles.map(a => ({ lineId: vehicleHover.lineId, offset: a.offset, position: a.position })),
+        axleSpacings: vehicleHover.axleSpacings,
       })
     }
   }
@@ -342,7 +342,7 @@ export function Canvas({
     // ── Drag mode ──
     if (mode === 'drag') {
       if (activeDrag) {
-        const wb = wheelbaseRef.current
+        const wb = maxWheelbaseRef.current
         const tm = tangentModeRef.current
 
         if (activeDrag.type === 'line-start') {
@@ -377,7 +377,7 @@ export function Canvas({
           try {
             const bezier = createBezierCurve(
               fromLine, toLine,
-              { wheelbase: wb, tangentMode: tm },
+              { maxWheelbase: wb, tangentMode: tm },
               false,
               { fromOffset: clamped, fromIsPercentage: false, toOffset: curve.toOffset, toIsPercentage: false }
             )
@@ -397,7 +397,7 @@ export function Canvas({
             try {
               const bezier = createBezierCurve(
                 fromLine, toLine,
-                { wheelbase: wb, tangentMode: tm },
+                { maxWheelbase: wb, tangentMode: tm },
                 false,
                 { fromOffset: curve.fromOffset, fromIsPercentage: false, toOffset: clamped, toIsPercentage: false }
               )
@@ -424,16 +424,18 @@ export function Canvas({
     if (mode === 'vehicle') {
       const hit = findLineHit(mouse)
       if (hit) {
-        const wb       = wheelbaseRef.current
+        const wb       = maxWheelbaseRef.current
         const lineLen  = getLineLength(hit.line)
+        // Default: 2-axle vehicle dengan spacing = maxWheelbase
+        const axleSpacings = [wb]
         const validMax = lineLen - wb
-        // Rear axle valid range: [0, lineLength - wheelbase]
+        // Rear axle valid range: [0, lineLength - maxWheelbase]
         if (validMax > 0 && hit.offset >= 0 && hit.offset <= validMax) {
-          const front = calculateInitialFrontPosition(hit.line.id, hit.offset, wb, hit.line)
+          const axleStates = calculateInitialAxlePositions(hit.line.id, hit.offset, axleSpacings, hit.line)
           setVehicleHover({
             lineId: hit.line.id,
-            rear:   { offset: hit.offset,              position: hit.point          },
-            front:  { offset: front.absoluteOffset,    position: front.position     },
+            axles: axleStates.map(a => ({ offset: a.absoluteOffset, position: a.position })),
+            axleSpacings,
           })
         } else {
           setVehicleHover(null)
@@ -447,7 +449,7 @@ export function Canvas({
     // ── Curve mode ──
     if (mode === 'curve') {
       if (curveDrag) {
-        const wb = wheelbaseRef.current
+        const wb = maxWheelbaseRef.current
         const tm = tangentModeRef.current
         const hit = findLineHit(mouse, curveDrag.fromLineId)
 
@@ -459,7 +461,7 @@ export function Canvas({
             try {
               const bezier = createBezierCurve(
                 fromLine, hit.line,
-                { wheelbase: wb, tangentMode: tm },
+                { maxWheelbase: wb, tangentMode: tm },
                 false,
                 { fromOffset: curveDrag.fromOffset, fromIsPercentage: false, toOffset: hit.offset, toIsPercentage: false }
               )
@@ -475,7 +477,7 @@ export function Canvas({
         const hit = findLineHit(mouse)
         if (hit) {
           const len = getLineLength(hit.line)
-          const wb  = wheelbaseRef.current
+          const wb  = maxWheelbaseRef.current
           if (hit.offset >= wb && hit.offset <= len) {
             setCurveHover({ lineId: hit.line.id, offset: hit.offset, point: hit.point })
           } else {
@@ -597,35 +599,46 @@ export function Canvas({
       {/* ── Placed vehicles ── */}
       {vehicles.map(v => (
         <g key={v.id}>
-          {/* Body: line from rear to front */}
-          <line
-            x1={v.rear.position.x}  y1={v.rear.position.y}
-            x2={v.front.position.x} y2={v.front.position.y}
-            stroke="#fb923c" strokeWidth={2.5} strokeLinecap="round"
-          />
-          {/* Rear axle — red donut */}
-          <circle cx={v.rear.position.x}  cy={v.rear.position.y}  r={5} fill="#06080c" stroke="#f87171" strokeWidth={1.8} />
-          <circle cx={v.rear.position.x}  cy={v.rear.position.y}  r={2} fill="#f87171" />
-          {/* Front axle — amber donut */}
-          <circle cx={v.front.position.x} cy={v.front.position.y} r={5} fill="#06080c" stroke="#fbbf24" strokeWidth={1.8} />
-          <circle cx={v.front.position.x} cy={v.front.position.y} r={2} fill="#fbbf24" />
+          {/* Body segments antara axle berurutan */}
+          {v.axles.slice(0, -1).map((axle, i) => (
+            <line key={i}
+              x1={axle.position.x} y1={axle.position.y}
+              x2={v.axles[i + 1].position.x} y2={v.axles[i + 1].position.y}
+              stroke="#fb923c" strokeWidth={2.5} strokeLinecap="round"
+            />
+          ))}
+          {/* Tiap axle sebagai donut: axles[0]=front=amber, axles[N-1]=rear=red, mid=slate */}
+          {v.axles.map((axle, i) => {
+            const color = i === 0 ? '#fbbf24' : i === v.axles.length - 1 ? '#f87171' : '#94a3b8'
+            return (
+              <g key={i}>
+                <circle cx={axle.position.x} cy={axle.position.y} r={5} fill="#06080c" stroke={color} strokeWidth={1.8} />
+                <circle cx={axle.position.x} cy={axle.position.y} r={2} fill={color} />
+              </g>
+            )
+          })}
         </g>
       ))}
 
       {/* ── Vehicle hover preview ── */}
       {vehicleHover && (
         <g>
-          {/* Body preview */}
-          <line
-            x1={vehicleHover.rear.position.x}  y1={vehicleHover.rear.position.y}
-            x2={vehicleHover.front.position.x} y2={vehicleHover.front.position.y}
-            stroke="#fb923c" strokeWidth={2.5} strokeLinecap="round"
-            strokeOpacity={0.45} strokeDasharray="6 3"
-          />
-          {/* Rear axle preview */}
-          <circle cx={vehicleHover.rear.position.x}  cy={vehicleHover.rear.position.y}  r={5} fill="#06080c" stroke="#f87171" strokeWidth={1.8} strokeOpacity={0.55} />
-          {/* Front axle preview */}
-          <circle cx={vehicleHover.front.position.x} cy={vehicleHover.front.position.y} r={5} fill="#06080c" stroke="#fbbf24" strokeWidth={1.8} strokeOpacity={0.55} />
+          {/* Body segments preview */}
+          {vehicleHover.axles.slice(0, -1).map((axle, i) => (
+            <line key={i}
+              x1={axle.position.x} y1={axle.position.y}
+              x2={vehicleHover.axles[i + 1].position.x} y2={vehicleHover.axles[i + 1].position.y}
+              stroke="#fb923c" strokeWidth={2.5} strokeLinecap="round"
+              strokeOpacity={0.45} strokeDasharray="6 3"
+            />
+          ))}
+          {/* Axle donuts preview */}
+          {vehicleHover.axles.map((axle, i) => {
+            const color = i === 0 ? '#fbbf24' : i === vehicleHover.axles.length - 1 ? '#f87171' : '#94a3b8'
+            return (
+              <circle key={i} cx={axle.position.x} cy={axle.position.y} r={5} fill="#06080c" stroke={color} strokeWidth={1.8} strokeOpacity={0.55} />
+            )
+          })}
         </g>
       )}
 

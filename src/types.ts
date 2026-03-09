@@ -16,12 +16,13 @@ export interface StoredCurve {
 
 /**
  * A vehicle placed on the canvas.
- * rear = reference axle; front = always wheelbase ahead along the arc.
+ * axles[0] = terdepan (front), axles[N-1] = paling belakang (rear).
+ * axleSpacings[i] = jarak arc-length antara axles[i] dan axles[i+1].
  */
 export interface PlacedVehicle {
   id: string
-  rear:  { lineId: string; offset: number; position: Point }
-  front: { lineId: string; offset: number; position: Point }
+  axles: Array<{ lineId: string; offset: number; position: Point }>
+  axleSpacings: number[]
 }
 
 export type { TangentMode }

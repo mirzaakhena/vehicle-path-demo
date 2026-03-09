@@ -10,7 +10,7 @@ export default function App() {
   const [curves, setCurves] = useState<StoredCurve[]>([])
   const [vehicles, setVehicles] = useState<PlacedVehicle[]>([])
   const [mode, setMode] = useState<Mode>('drag')
-  const [wheelbase, setWheelbase] = useState(10)
+  const [maxWheelbase, setMaxWheelbase] = useState(10)
   const [tangentMode, setTangentMode] = useState<TangentMode>('proportional-40')
 
   // Keep the graph up-to-date as scene changes — maximizing library usage
@@ -26,9 +26,9 @@ export default function App() {
           toOffset: c.toOffset,
           toIsPercentage: false,
         })),
-        { wheelbase, tangentMode }
+        { maxWheelbase, tangentMode }
       ),
-    [lines, curves, wheelbase, tangentMode]
+    [lines, curves, maxWheelbase, tangentMode]
   )
 
   /**
@@ -55,7 +55,7 @@ export default function App() {
         const bezier = createBezierCurve(
           fromLine,
           toLine,
-          { wheelbase, tangentMode },
+          { maxWheelbase, tangentMode },
           false,
           {
             fromOffset: curve.fromOffset,
@@ -99,7 +99,7 @@ export default function App() {
           curves={curves}
           vehicles={vehicles}
           mode={mode}
-          wheelbase={wheelbase}
+          maxWheelbase={maxWheelbase}
           tangentMode={tangentMode}
           onLineAdd={line => setLines(prev => [...prev, line])}
           onCurveAdd={curve => setCurves(prev => [...prev, curve])}
@@ -112,14 +112,14 @@ export default function App() {
       {/* Panel — 1/4 width */}
       <Panel
         mode={mode}
-        wheelbase={wheelbase}
+        maxWheelbase={maxWheelbase}
         tangentMode={tangentMode}
         lineCount={lines.length}
         curveCount={curves.length}
         vehicleCount={vehicles.length}
         graphNodeCount={graph.adjacency.size}
         onModeChange={setMode}
-        onWheelbaseChange={setWheelbase}
+        onMaxWheelbaseChange={setMaxWheelbase}
         onTangentModeChange={setTangentMode}
       />
     </div>

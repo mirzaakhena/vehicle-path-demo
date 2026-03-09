@@ -3,27 +3,27 @@ import type { Mode, TangentMode } from '../types'
 
 interface Props {
   mode: Mode
-  wheelbase: number
+  maxWheelbase: number
   tangentMode: TangentMode
   lineCount: number
   curveCount: number
   vehicleCount: number
   graphNodeCount: number
   onModeChange: (m: Mode) => void
-  onWheelbaseChange: (v: number) => void
+  onMaxWheelbaseChange: (v: number) => void
   onTangentModeChange: (t: TangentMode) => void
 }
 
 export function Panel({
   mode,
-  wheelbase,
+  maxWheelbase,
   tangentMode,
   lineCount,
   curveCount,
   vehicleCount,
   graphNodeCount,
   onModeChange,
-  onWheelbaseChange,
+  onMaxWheelbaseChange,
   onTangentModeChange,
 }: Props) {
   return (
@@ -153,7 +153,7 @@ export function Panel({
               marginBottom: 12,
             }}
           >
-            <SectionLabel style={{ marginBottom: 0 }}>Wheelbase</SectionLabel>
+            <SectionLabel style={{ marginBottom: 0 }}>Max Wheelbase</SectionLabel>
             <span
               style={{
                 fontFamily: "'JetBrains Mono', monospace",
@@ -162,7 +162,7 @@ export function Panel({
                 letterSpacing: 1,
               }}
             >
-              {wheelbase}
+              {maxWheelbase}
               <span style={{ fontSize: 11, color: '#4a5878', marginLeft: 3 }}>
                 px
               </span>
@@ -174,8 +174,8 @@ export function Panel({
             min={5}
             max={200}
             step={1}
-            value={wheelbase}
-            onChange={e => onWheelbaseChange(Number(e.target.value))}
+            value={maxWheelbase}
+            onChange={e => onMaxWheelbaseChange(Number(e.target.value))}
           />
 
           <div
@@ -304,8 +304,8 @@ export function Panel({
             {mode === 'vehicle' && (
               <>
                 <GuideRow>Hover a line to preview</GuideRow>
-                <GuideRow>Rear valid: [0 → end − wb]</GuideRow>
-                <GuideRow>Front = rear + wheelbase</GuideRow>
+                <GuideRow>Rear valid: [0 → end − maxWB]</GuideRow>
+                <GuideRow>Front = rear + maxWheelbase</GuideRow>
                 <GuideRow>Click to place vehicle</GuideRow>
               </>
             )}
