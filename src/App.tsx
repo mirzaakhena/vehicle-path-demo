@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import type { Line } from 'vehicle-path2/core'
-import { buildGraph, createBezierCurve, serializeScene, getPositionFromOffset } from 'vehicle-path2/core'
+import { buildGraph, createBezierCurve, serializeScene, getPositionFromOffset, calculateInitialAxlePositions } from 'vehicle-path2/core'
 import type { Mode, StoredCurve, TangentMode, PlacedVehicle, VehicleEndPoint } from './types'
 import { Canvas } from './components/Canvas'
 import { Panel } from './components/Panel'
@@ -84,7 +84,13 @@ export default function App() {
     const updatedEndPoints: Record<string, VehicleEndPoint> = {}
     for (const [vId, ep] of Object.entries(vehicleEndPoints)) {
       if (ep.lineId === updatedLine.id) {
-        updatedEndPoints[vId] = { ...ep, position: getPositionFromOffset(updatedLine, ep.offset) }
+        const vehicle = updatedVehicles.find(v => v.id === vId)
+        if (!vehicle) { updatedEndPoints[vId] = ep; continue }
+        const axleStates = calculateInitialAxlePositions(updatedLine.id, ep.offset, vehicle.axleSpacings, updatedLine)
+        updatedEndPoints[vId] = {
+          ...ep,
+          axles: axleStates.map(a => ({ offset: a.absoluteOffset, position: a.position })),
+        }
       } else {
         updatedEndPoints[vId] = ep
       }
@@ -110,9 +116,17 @@ export default function App() {
 
   function handleVehicleEndSet(vehicleId: string, lineId: string, offset: number) {
     const line = lines.find(l => l.id === lineId)
-    if (!line) return
-    const position = getPositionFromOffset(line, offset)
-    setVehicleEndPoints(prev => ({ ...prev, [vehicleId]: { lineId, offset, position } }))
+    const vehicle = vehicles.find(v => v.id === vehicleId)
+    if (!line || !vehicle) return
+    const axleStates = calculateInitialAxlePositions(lineId, offset, vehicle.axleSpacings, line)
+    setVehicleEndPoints(prev => ({
+      ...prev,
+      [vehicleId]: {
+        lineId,
+        offset,
+        axles: axleStates.map(a => ({ offset: a.absoluteOffset, position: a.position })),
+      },
+    }))
   }
 
   function handleVehicleEndDelete(vehicleId: string) {

@@ -179,7 +179,7 @@ export function Canvas({
   const [activeDrag,       setActiveDrag]       = useState<ActiveDrag | null>(null)
   const [dragHover,        setDragHover]        = useState<DragHover | null>(null)
   const [vehicleHover,     setVehicleHover]     = useState<VehicleHover | null>(null)
-  const [vehicleEndHover,  setVehicleEndHover]  = useState<{ lineId: string; offset: number; position: Point; isValid: boolean } | null>(null)
+  const [vehicleEndHover,  setVehicleEndHover]  = useState<{ lineId: string; offset: number; axles: Array<{ offset: number; position: Point }>; isValid: boolean } | null>(null)
   const [mousePos,         setMousePos]         = useState<Point | null>(null)
 
   // Clear all mode-specific state when mode switches
@@ -287,7 +287,9 @@ export function Canvas({
   function findVehicleEndHit(point: Point): string | null {
     const HIT_R = 12
     for (const [vId, ep] of Object.entries(vehicleEndPointsRef.current)) {
-      if (libDistance(point, ep.position) <= HIT_R) return vId
+      for (const axle of ep.axles) {
+        if (libDistance(point, axle.position) <= HIT_R) return vId
+      }
     }
     return null
   }
@@ -490,17 +492,25 @@ export function Canvas({
           if (!vehicle) return
           const hit = findLineHit(mouse)
           if (hit) {
-            const rearmost = vehicle.axles[vehicle.axles.length - 1]
+            const totalSpacing = vehicle.axleSpacings.reduce((a, b) => a + b, 0)
+            const lineLen = getLineLength(hit.line)
+            const rearOffset = hit.offset
+            if (rearOffset < 0 || rearOffset > lineLen - totalSpacing) {
+              setVehicleEndHover(null); return
+            }
+            const frontEndOffset = rearOffset + totalSpacing
+            const front = vehicle.axles[0]
             const path = findPath(
               graphRef.current,
-              { lineId: rearmost.lineId, offset: rearmost.offset },
+              { lineId: front.lineId, offset: front.offset },
               hit.line.id,
-              hit.offset
+              frontEndOffset
             )
+            const axleStates = calculateInitialAxlePositions(hit.line.id, rearOffset, vehicle.axleSpacings, hit.line)
             setVehicleEndHover({
               lineId: hit.line.id,
-              offset: hit.offset,
-              position: hit.point,
+              offset: rearOffset,
+              axles: axleStates.map(a => ({ offset: a.absoluteOffset, position: a.position })),
               isValid: path !== null,
             })
           } else {
@@ -542,17 +552,25 @@ export function Canvas({
       if (!vehicle) { setVehicleEndHover(null); return }
       const hit = findLineHit(mouse)
       if (hit) {
-        const rearmost = vehicle.axles[vehicle.axles.length - 1]
+        const totalSpacing = vehicle.axleSpacings.reduce((a, b) => a + b, 0)
+        const lineLen = getLineLength(hit.line)
+        const rearOffset = hit.offset
+        if (rearOffset < 0 || rearOffset > lineLen - totalSpacing) {
+          setVehicleEndHover(null); return
+        }
+        const frontEndOffset = rearOffset + totalSpacing
+        const front = vehicle.axles[0]
         const path = findPath(
           graphRef.current,
-          { lineId: rearmost.lineId, offset: rearmost.offset },
+          { lineId: front.lineId, offset: front.offset },
           hit.line.id,
-          hit.offset
+          frontEndOffset
         )
+        const axleStates = calculateInitialAxlePositions(hit.line.id, rearOffset, vehicle.axleSpacings, hit.line)
         setVehicleEndHover({
           lineId: hit.line.id,
-          offset: hit.offset,
-          position: hit.point,
+          offset: rearOffset,
+          axles: axleStates.map(a => ({ offset: a.absoluteOffset, position: a.position })),
           isValid: path !== null,
         })
       } else {
@@ -779,43 +797,61 @@ export function Canvas({
       {/* ── Vehicle end markers (placed) ── */}
       {Object.entries(vehicleEndPoints).map(([vId, ep]) => (
         <g key={`end-${vId}`}>
-          <circle cx={ep.position.x} cy={ep.position.y} r={7}
-            fill="none" stroke="#4ade80" strokeWidth={2} strokeOpacity={0.9} />
-          <circle cx={ep.position.x} cy={ep.position.y} r={3}
-            fill="#4ade80" fillOpacity={0.9} />
+          {/* Body segments */}
+          {ep.axles.slice(0, -1).map((axle, i) => (
+            <line key={i}
+              x1={axle.position.x} y1={axle.position.y}
+              x2={ep.axles[i + 1].position.x} y2={ep.axles[i + 1].position.y}
+              stroke="#4ade80" strokeWidth={2} strokeLinecap="round" strokeOpacity={0.5}
+            />
+          ))}
+          {/* Axle donuts */}
+          {ep.axles.map((axle, i) => (
+            <g key={i}>
+              <circle cx={axle.position.x} cy={axle.position.y} r={5}
+                fill="#06080c" stroke="#4ade80" strokeWidth={1.8} strokeOpacity={0.85} />
+              <circle cx={axle.position.x} cy={axle.position.y} r={2}
+                fill="#4ade80" fillOpacity={0.85} />
+            </g>
+          ))}
         </g>
       ))}
 
       {/* ── Vehicle End hover preview ── */}
-      {vehicleEndHover && (
-        <g>
-          <circle
-            cx={vehicleEndHover.position.x} cy={vehicleEndHover.position.y}
-            r={7} fill="none"
-            stroke={vehicleEndHover.isValid ? '#4ade80' : '#f87171'}
-            strokeWidth={2}
-            strokeOpacity={0.8}
-          />
-          <circle
-            cx={vehicleEndHover.position.x} cy={vehicleEndHover.position.y}
-            r={3}
-            fill={vehicleEndHover.isValid ? '#4ade80' : '#f87171'}
-            fillOpacity={0.8}
-          />
-          {!vehicleEndHover.isValid && (
-            <text
-              x={vehicleEndHover.position.x + 12}
-              y={vehicleEndHover.position.y + 4}
-              fill="#f87171"
-              fontSize={11}
-              fontFamily="'JetBrains Mono', monospace"
-              opacity={0.9}
-            >
-              no path
-            </text>
-          )}
-        </g>
-      )}
+      {vehicleEndHover && (() => {
+        const color = vehicleEndHover.isValid ? '#4ade80' : '#f87171'
+        const lastAxle = vehicleEndHover.axles[vehicleEndHover.axles.length - 1]
+        return (
+          <g>
+            {/* Body segments */}
+            {vehicleEndHover.axles.slice(0, -1).map((axle, i) => (
+              <line key={i}
+                x1={axle.position.x} y1={axle.position.y}
+                x2={vehicleEndHover.axles[i + 1].position.x} y2={vehicleEndHover.axles[i + 1].position.y}
+                stroke={color} strokeWidth={2.5} strokeLinecap="round"
+                strokeOpacity={0.45} strokeDasharray="6 3"
+              />
+            ))}
+            {/* Axle donuts */}
+            {vehicleEndHover.axles.map((axle, i) => (
+              <circle key={i}
+                cx={axle.position.x} cy={axle.position.y} r={5}
+                fill="#06080c" stroke={color} strokeWidth={1.8} strokeOpacity={0.55}
+              />
+            ))}
+            {/* "no path" label di dekat rear axle */}
+            {!vehicleEndHover.isValid && (
+              <text
+                x={lastAxle.position.x + 10} y={lastAxle.position.y + 4}
+                fill="#f87171" fontSize={11}
+                fontFamily="'JetBrains Mono', monospace" opacity={0.9}
+              >
+                no path
+              </text>
+            )}
+          </g>
+        )
+      })()}
 
       {/* ── Vehicle hover preview ── */}
       {vehicleHover && (

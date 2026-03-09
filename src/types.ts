@@ -27,12 +27,13 @@ export interface PlacedVehicle {
 
 /**
  * Posisi end (target goto) untuk satu vehicle.
- * position = pre-computed Point untuk rendering.
+ * offset = rear axle anchor (px dari start line).
+ * axles[0] = front, axles[N-1] = rear — pre-computed untuk rendering.
  */
 export interface VehicleEndPoint {
   lineId: string
   offset: number
-  position: Point
+  axles: Array<{ offset: number; position: Point }>
 }
 
 export type { TangentMode }
