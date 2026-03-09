@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react'
+import { useState, type CSSProperties } from 'react'
 import type { Mode, TangentMode } from '../types'
 
 interface Props {
@@ -12,6 +12,7 @@ interface Props {
   onModeChange: (m: Mode) => void
   onMaxWheelbaseChange: (v: number) => void
   onTangentModeChange: (t: TangentMode) => void
+  onCopySnapshot: () => void
 }
 
 export function Panel({
@@ -25,7 +26,15 @@ export function Panel({
   onModeChange,
   onMaxWheelbaseChange,
   onTangentModeChange,
+  onCopySnapshot,
 }: Props) {
+  const [copied, setCopied] = useState(false)
+
+  function handleCopy() {
+    onCopySnapshot()
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1500)
+  }
   return (
     <aside
       style={{
@@ -250,6 +259,34 @@ export function Panel({
               highlight={graphNodeCount > 0}
             />
           </div>
+        </section>
+
+        {/* ── Copy Snapshot ── */}
+        <section>
+          <button
+            onClick={handleCopy}
+            style={{
+              width: '100%',
+              padding: '10px 12px',
+              border: `1px solid ${copied ? '#4ade80' : '#1c2030'}`,
+              background: copied ? '#4ade8015' : 'transparent',
+              color: copied ? '#4ade80' : '#5a6e88',
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 11,
+              letterSpacing: 1.5,
+              textTransform: 'uppercase',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              transition: 'all 0.15s ease',
+              outline: 'none',
+            }}
+          >
+            <span style={{ fontSize: 14 }}>{copied ? '✓' : '⎘'}</span>
+            {copied ? 'Copied!' : 'Copy Snapshot'}
+          </button>
         </section>
 
         {/* ── Vehicles ── */}

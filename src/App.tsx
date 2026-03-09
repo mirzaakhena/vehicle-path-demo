@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import type { Line } from 'vehicle-path2/core'
-import { buildGraph, createBezierCurve } from 'vehicle-path2/core'
+import { buildGraph, createBezierCurve, serializeScene } from 'vehicle-path2/core'
 import type { Mode, StoredCurve, TangentMode, PlacedVehicle } from './types'
 import { Canvas } from './components/Canvas'
 import { Panel } from './components/Panel'
@@ -82,6 +82,11 @@ export default function App() {
     setCurves(prev => prev.map(c => (c.id === updatedCurve.id ? updatedCurve : c)))
   }
 
+  function handleCopySnapshot() {
+    const json = serializeScene(lines, curves, vehicles)
+    navigator.clipboard.writeText(json)
+  }
+
   return (
     <div
       style={{
@@ -121,6 +126,7 @@ export default function App() {
         onModeChange={setMode}
         onMaxWheelbaseChange={setMaxWheelbase}
         onTangentModeChange={setTangentMode}
+        onCopySnapshot={handleCopySnapshot}
       />
     </div>
   )
