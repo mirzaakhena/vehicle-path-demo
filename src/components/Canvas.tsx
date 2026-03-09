@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
-import type { Line, Point, BezierCurve, TangentMode } from 'vehicle-path2/core'
-import { createBezierCurve, getLineLength, distance as libDistance, calculateInitialAxlePositions } from 'vehicle-path2/core'
-import type { Mode, StoredCurve, PlacedVehicle } from '../types'
+import type { Line, Point, BezierCurve, TangentMode, Graph } from 'vehicle-path2/core'
+import { createBezierCurve, getLineLength, distance as libDistance, calculateInitialAxlePositions, findPath } from 'vehicle-path2/core'
+import type { Mode, StoredCurve, PlacedVehicle, VehicleEndPoint } from '../types'
 import { projectPointOnLine, getPointAtOffset } from '../geometry'
 
 // ─── Hit detection radii ─────────────────────────────────────────────────────
@@ -17,6 +17,8 @@ type DragHover =
   | { type: 'line-body';  lineId: string }
   | { type: 'curve-from'; curveId: string }
   | { type: 'curve-to';   curveId: string }
+  | { type: 'vehicle-body'; vehicleId: string }
+  | { type: 'vehicle-end'; vehicleId: string }
 
 type ActiveDrag =
   | { type: 'line-start'; lineId: string; minLength: number }
@@ -24,6 +26,8 @@ type ActiveDrag =
   | { type: 'line-body';  lineId: string; startMouse: Point; originalStart: Point; originalEnd: Point }
   | { type: 'curve-from'; curveId: string; fromLineId: string; toLineId: string }
   | { type: 'curve-to';   curveId: string; fromLineId: string; toLineId: string }
+  | { type: 'vehicle-body'; vehicleId: string; lineId: string }
+  | { type: 'vehicle-end'; vehicleId: string }
 
 // ─── Curve draw types ────────────────────────────────────────────────────────
 
@@ -68,11 +72,17 @@ interface Props {
   mode: Mode
   maxWheelbase: number
   tangentMode: TangentMode
+  graph: Graph
+  selectedVehicleId: string | null
+  vehicleEndPoints: Record<string, VehicleEndPoint>
   onLineAdd: (line: Line) => void
   onCurveAdd: (curve: StoredCurve) => void
   onLineUpdate: (line: Line) => void
   onCurveUpdate: (curve: StoredCurve) => void
   onVehicleAdd: (vehicle: PlacedVehicle) => void
+  onVehicleUpdate: (vehicle: PlacedVehicle) => void
+  onVehicleSelect: (id: string | null) => void
+  onVehicleEndSet: (vehicleId: string, lineId: string, offset: number) => void
 }
 
 // ─── ID generator ────────────────────────────────────────────────────────────
@@ -138,28 +148,39 @@ export function Canvas({
   mode,
   maxWheelbase,
   tangentMode,
+  graph,
+  selectedVehicleId,
+  vehicleEndPoints,
   onLineAdd,
   onCurveAdd,
   onLineUpdate,
   onCurveUpdate,
   onVehicleAdd,
+  onVehicleUpdate,
+  onVehicleSelect,
+  onVehicleEndSet,
 }: Props) {
   const svgRef = useRef<SVGSVGElement>(null)
 
   // Always-fresh refs for use in event handlers (avoids stale closures)
-  const linesRef        = useRef(lines);        linesRef.current        = lines
-  const curvesRef       = useRef(curves);       curvesRef.current       = curves
-  const maxWheelbaseRef = useRef(maxWheelbase); maxWheelbaseRef.current = maxWheelbase
-  const tangentModeRef  = useRef(tangentMode);  tangentModeRef.current  = tangentMode
+  const linesRef              = useRef(lines);              linesRef.current              = lines
+  const curvesRef             = useRef(curves);             curvesRef.current             = curves
+  const vehiclesRef           = useRef(vehicles);           vehiclesRef.current           = vehicles
+  const maxWheelbaseRef       = useRef(maxWheelbase);       maxWheelbaseRef.current       = maxWheelbase
+  const tangentModeRef        = useRef(tangentMode);        tangentModeRef.current        = tangentMode
+  const graphRef              = useRef(graph);              graphRef.current              = graph
+  const selectedVehicleIdRef  = useRef(selectedVehicleId);  selectedVehicleIdRef.current  = selectedVehicleId
+  const vehicleEndPointsRef   = useRef(vehicleEndPoints);   vehicleEndPointsRef.current   = vehicleEndPoints
 
   // ── State ─────────────────────────────────────────────────────────────────
-  const [lineDrawing,   setLineDrawing]   = useState<LineDrawing | null>(null)
-  const [curveHover,    setCurveHover]    = useState<HoverState | null>(null)
-  const [curveDrag,     setCurveDrag]     = useState<CurveDrag | null>(null)
-  const [activeDrag,    setActiveDrag]    = useState<ActiveDrag | null>(null)
-  const [dragHover,     setDragHover]     = useState<DragHover | null>(null)
-  const [vehicleHover,  setVehicleHover]  = useState<VehicleHover | null>(null)
-  const [mousePos,      setMousePos]      = useState<Point | null>(null)
+  const [lineDrawing,      setLineDrawing]      = useState<LineDrawing | null>(null)
+  const [curveHover,       setCurveHover]       = useState<HoverState | null>(null)
+  const [curveDrag,        setCurveDrag]        = useState<CurveDrag | null>(null)
+  const [activeDrag,       setActiveDrag]       = useState<ActiveDrag | null>(null)
+  const [dragHover,        setDragHover]        = useState<DragHover | null>(null)
+  const [vehicleHover,     setVehicleHover]     = useState<VehicleHover | null>(null)
+  const [vehicleEndHover,  setVehicleEndHover]  = useState<{ lineId: string; offset: number; position: Point; isValid: boolean } | null>(null)
+  const [mousePos,         setMousePos]         = useState<Point | null>(null)
 
   // Clear all mode-specific state when mode switches
   useEffect(() => {
@@ -169,6 +190,7 @@ export function Canvas({
     setActiveDrag(null)
     setDragHover(null)
     setVehicleHover(null)
+    setVehicleEndHover(null)
   }, [mode])
 
   // ── Utilities ──────────────────────────────────────────────────────────────
@@ -247,6 +269,29 @@ export function Canvas({
     return null
   }
 
+  function findVehicleHit(point: Point): PlacedVehicle | null {
+    const HIT_R = 12
+    for (const v of vehiclesRef.current) {
+      for (const axle of v.axles) {
+        if (libDistance(point, axle.position) <= HIT_R) return v
+      }
+      for (let i = 0; i < v.axles.length - 1; i++) {
+        const a = v.axles[i], b = v.axles[i + 1]
+        const { distance: d } = projectPointOnLine(point, { id: '', start: a.position, end: b.position })
+        if (d <= HIT_R) return v
+      }
+    }
+    return null
+  }
+
+  function findVehicleEndHit(point: Point): string | null {
+    const HIT_R = 12
+    for (const [vId, ep] of Object.entries(vehicleEndPointsRef.current)) {
+      if (libDistance(point, ep.position) <= HIT_R) return vId
+    }
+    return null
+  }
+
   // ── Event handlers ─────────────────────────────────────────────────────────
 
   function handleMouseDown(e: React.MouseEvent) {
@@ -256,7 +301,18 @@ export function Canvas({
     // ── Drag mode ──
     if (mode === 'drag') {
       const target = findDragHoverTarget(mouse)
-      if (!target) return
+      if (!target) {
+        // ── Vehicle click selection ──
+        const hitVehicle = findVehicleHit(mouse)
+        if (hitVehicle) {
+          onVehicleSelect(selectedVehicleId === hitVehicle.id ? null : hitVehicle.id)
+          return
+        }
+        if (selectedVehicleId) {
+          onVehicleSelect(null)
+        }
+        return
+      }
 
       if (target.type === 'line-start') {
         setActiveDrag({
@@ -295,7 +351,24 @@ export function Canvas({
           fromLineId: curve.fromLineId,
           toLineId: curve.toLineId,
         })
+      } else if (target.type === 'vehicle-end') {
+        setActiveDrag({ type: 'vehicle-end', vehicleId: target.vehicleId })
+      } else if (target.type === 'vehicle-body') {
+        const vehicle = vehiclesRef.current.find(v => v.id === target.vehicleId)
+        if (vehicle) {
+          const rearmost = vehicle.axles[vehicle.axles.length - 1]
+          setActiveDrag({ type: 'vehicle-body', vehicleId: vehicle.id, lineId: rearmost.lineId })
+          onVehicleSelect(vehicle.id)
+        }
       }
+      return
+    }
+
+    // ── Vehicle End mode ──
+    if (mode === 'vehicle-end') {
+      const selId = selectedVehicleId
+      if (!selId || !vehicleEndHover?.isValid) return
+      onVehicleEndSet(selId, vehicleEndHover.lineId, vehicleEndHover.offset)
       return
     }
 
@@ -323,8 +396,8 @@ export function Canvas({
       }
     }
 
-    // ── Vehicle mode ──
-    if (mode === 'vehicle' && vehicleHover) {
+    // ── Vehicle Start mode ──
+    if (mode === 'vehicle-start' && vehicleHover) {
       onVehicleAdd({
         id: nextVehicleId(),
         axles: vehicleHover.axles.map(a => ({ lineId: vehicleHover.lineId, offset: a.offset, position: a.position })),
@@ -397,10 +470,58 @@ export function Canvas({
             )
             onCurveUpdate({ ...curve, toOffset: clamped, bezier })
           } catch { /* degenerate geometry — skip */ }
+
+        } else if (activeDrag.type === 'vehicle-body') {
+          const vehicle = vehiclesRef.current.find(v => v.id === activeDrag.vehicleId)
+          const line = linesRef.current.find(l => l.id === activeDrag.lineId)
+          if (!vehicle || !line) return
+          const { offset } = projectPointOnLine(mouse, line)
+          const lineLen = getLineLength(line)
+          const totalSpacing = vehicle.axleSpacings.reduce((a, b) => a + b, 0)
+          const rearOffset = Math.max(0, Math.min(offset, lineLen - totalSpacing))
+          const axleStates = calculateInitialAxlePositions(line.id, rearOffset, vehicle.axleSpacings, line)
+          onVehicleUpdate({
+            ...vehicle,
+            axles: axleStates.map(a => ({ lineId: line.id, offset: a.absoluteOffset, position: a.position })),
+          })
+
+        } else if (activeDrag.type === 'vehicle-end') {
+          const vehicle = vehiclesRef.current.find(v => v.id === activeDrag.vehicleId)
+          if (!vehicle) return
+          const hit = findLineHit(mouse)
+          if (hit) {
+            const rearmost = vehicle.axles[vehicle.axles.length - 1]
+            const path = findPath(
+              graphRef.current,
+              { lineId: rearmost.lineId, offset: rearmost.offset },
+              hit.line.id,
+              hit.offset
+            )
+            setVehicleEndHover({
+              lineId: hit.line.id,
+              offset: hit.offset,
+              position: hit.point,
+              isValid: path !== null,
+            })
+          } else {
+            setVehicleEndHover(null)
+          }
         }
       } else {
         // No active drag — update hover highlight
-        setDragHover(findDragHoverTarget(mouse))
+        const dragHoverTarget = findDragHoverTarget(mouse)
+        if (dragHoverTarget) {
+          setDragHover(dragHoverTarget)
+        } else {
+          // Check vehicle end markers first (higher priority than body)
+          const hitEndVehicleId = findVehicleEndHit(mouse)
+          if (hitEndVehicleId) {
+            setDragHover({ type: 'vehicle-end', vehicleId: hitEndVehicleId })
+          } else {
+            const hitVehicle = findVehicleHit(mouse)
+            setDragHover(hitVehicle ? { type: 'vehicle-body', vehicleId: hitVehicle.id } : null)
+          }
+        }
       }
       return
     }
@@ -413,8 +534,35 @@ export function Canvas({
       return
     }
 
-    // ── Vehicle mode ──
-    if (mode === 'vehicle') {
+    // ── Vehicle End mode ──
+    if (mode === 'vehicle-end') {
+      const selId = selectedVehicleIdRef.current
+      if (!selId) { setVehicleEndHover(null); return }
+      const vehicle = vehiclesRef.current.find(v => v.id === selId)
+      if (!vehicle) { setVehicleEndHover(null); return }
+      const hit = findLineHit(mouse)
+      if (hit) {
+        const rearmost = vehicle.axles[vehicle.axles.length - 1]
+        const path = findPath(
+          graphRef.current,
+          { lineId: rearmost.lineId, offset: rearmost.offset },
+          hit.line.id,
+          hit.offset
+        )
+        setVehicleEndHover({
+          lineId: hit.line.id,
+          offset: hit.offset,
+          position: hit.point,
+          isValid: path !== null,
+        })
+      } else {
+        setVehicleEndHover(null)
+      }
+      return
+    }
+
+    // ── Vehicle Start mode ──
+    if (mode === 'vehicle-start') {
       const hit = findLineHit(mouse)
       if (hit) {
         const wb       = maxWheelbaseRef.current
@@ -485,6 +633,12 @@ export function Canvas({
     if (e.button !== 0) return
 
     if (mode === 'drag') {
+      if (activeDrag?.type === 'vehicle-end') {
+        if (vehicleEndHover?.isValid) {
+          onVehicleEndSet(activeDrag.vehicleId, vehicleEndHover.lineId, vehicleEndHover.offset)
+        }
+        setVehicleEndHover(null)
+      }
       setActiveDrag(null)
       return
     }
@@ -518,9 +672,10 @@ export function Canvas({
     setMousePos(null)
     setActiveDrag(null)
     setDragHover(null)
-    if (mode === 'line')    setLineDrawing(null)
-    if (mode === 'curve')   { setCurveHover(null); setCurveDrag(null) }
-    if (mode === 'vehicle') setVehicleHover(null)
+    if (mode === 'line')          setLineDrawing(null)
+    if (mode === 'curve')         { setCurveHover(null); setCurveDrag(null) }
+    if (mode === 'vehicle-start') setVehicleHover(null)
+    if (mode === 'vehicle-end')   setVehicleEndHover(null)
   }
 
   // ── Cursor ────────────────────────────────────────────────────────────────
@@ -528,13 +683,16 @@ export function Canvas({
   let cursor = 'default'
   if (mode === 'drag') {
     if (activeDrag) cursor = 'grabbing'
+    else if (dragHover?.type === 'vehicle-body' || dragHover?.type === 'vehicle-end') cursor = 'grab'
     else if (dragHover) cursor = 'grab'
   } else if (mode === 'line') {
     cursor = 'crosshair'
   } else if (mode === 'curve') {
     cursor = curveHover || curveDrag ? 'crosshair' : 'default'
-  } else if (mode === 'vehicle') {
+  } else if (mode === 'vehicle-start') {
     cursor = vehicleHover ? 'crosshair' : 'default'
+  } else if (mode === 'vehicle-end') {
+    cursor = vehicleEndHover?.isValid ? 'crosshair' : 'not-allowed'
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -598,6 +756,13 @@ export function Canvas({
               stroke="#fb923c" strokeWidth={2.5} strokeLinecap="round"
             />
           ))}
+          {/* Selection ring untuk vehicle yang dipilih */}
+          {v.id === selectedVehicleId && v.axles.map((axle, i) => (
+            <circle key={`sel-${i}`}
+              cx={axle.position.x} cy={axle.position.y} r={9}
+              fill="none" stroke="#fb923c" strokeWidth={1.5} strokeOpacity={0.6}
+            />
+          ))}
           {/* Tiap axle sebagai donut: axles[0]=front=amber, axles[N-1]=rear=red, mid=slate */}
           {v.axles.map((axle, i) => {
             const color = i === 0 ? '#fbbf24' : i === v.axles.length - 1 ? '#f87171' : '#94a3b8'
@@ -610,6 +775,47 @@ export function Canvas({
           })}
         </g>
       ))}
+
+      {/* ── Vehicle end markers (placed) ── */}
+      {Object.entries(vehicleEndPoints).map(([vId, ep]) => (
+        <g key={`end-${vId}`}>
+          <circle cx={ep.position.x} cy={ep.position.y} r={7}
+            fill="none" stroke="#4ade80" strokeWidth={2} strokeOpacity={0.9} />
+          <circle cx={ep.position.x} cy={ep.position.y} r={3}
+            fill="#4ade80" fillOpacity={0.9} />
+        </g>
+      ))}
+
+      {/* ── Vehicle End hover preview ── */}
+      {vehicleEndHover && (
+        <g>
+          <circle
+            cx={vehicleEndHover.position.x} cy={vehicleEndHover.position.y}
+            r={7} fill="none"
+            stroke={vehicleEndHover.isValid ? '#4ade80' : '#f87171'}
+            strokeWidth={2}
+            strokeOpacity={0.8}
+          />
+          <circle
+            cx={vehicleEndHover.position.x} cy={vehicleEndHover.position.y}
+            r={3}
+            fill={vehicleEndHover.isValid ? '#4ade80' : '#f87171'}
+            fillOpacity={0.8}
+          />
+          {!vehicleEndHover.isValid && (
+            <text
+              x={vehicleEndHover.position.x + 12}
+              y={vehicleEndHover.position.y + 4}
+              fill="#f87171"
+              fontSize={11}
+              fontFamily="'JetBrains Mono', monospace"
+              opacity={0.9}
+            >
+              no path
+            </text>
+          )}
+        </g>
+      )}
 
       {/* ── Vehicle hover preview ── */}
       {vehicleHover && (

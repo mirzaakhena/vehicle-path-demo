@@ -1,6 +1,6 @@
 import type { BezierCurve, TangentMode, Point } from 'vehicle-path2/core'
 
-export type Mode = 'drag' | 'line' | 'curve' | 'vehicle'
+export type Mode = 'drag' | 'line' | 'curve' | 'vehicle-start' | 'vehicle-end'
 
 export interface StoredCurve {
   id: string
@@ -23,6 +23,16 @@ export interface PlacedVehicle {
   id: string
   axles: Array<{ lineId: string; offset: number; position: Point }>
   axleSpacings: number[]
+}
+
+/**
+ * Posisi end (target goto) untuk satu vehicle.
+ * position = pre-computed Point untuk rendering.
+ */
+export interface VehicleEndPoint {
+  lineId: string
+  offset: number
+  position: Point
 }
 
 export type { TangentMode }

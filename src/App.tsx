@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import type { Line } from 'vehicle-path2/core'
 import { buildGraph, createBezierCurve, serializeScene, getPositionFromOffset } from 'vehicle-path2/core'
-import type { Mode, StoredCurve, TangentMode, PlacedVehicle } from './types'
+import type { Mode, StoredCurve, TangentMode, PlacedVehicle, VehicleEndPoint } from './types'
 import { Canvas } from './components/Canvas'
 import { Panel } from './components/Panel'
 
@@ -12,6 +12,8 @@ export default function App() {
   const [mode, setMode] = useState<Mode>('drag')
   const [maxWheelbase, setMaxWheelbase] = useState(10)
   const [tangentMode, setTangentMode] = useState<TangentMode>('proportional-40')
+  const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null)
+  const [vehicleEndPoints, setVehicleEndPoints] = useState<Record<string, VehicleEndPoint>>({})
 
   // Keep the graph up-to-date as scene changes — maximizing library usage
   const graph = useMemo(
@@ -79,9 +81,19 @@ export default function App() {
       ),
     }))
 
+    const updatedEndPoints: Record<string, VehicleEndPoint> = {}
+    for (const [vId, ep] of Object.entries(vehicleEndPoints)) {
+      if (ep.lineId === updatedLine.id) {
+        updatedEndPoints[vId] = { ...ep, position: getPositionFromOffset(updatedLine, ep.offset) }
+      } else {
+        updatedEndPoints[vId] = ep
+      }
+    }
+
     setLines(updatedLines)
     setCurves(updatedCurves)
     setVehicles(updatedVehicles)
+    setVehicleEndPoints(updatedEndPoints)
   }
 
   /**
@@ -90,6 +102,25 @@ export default function App() {
    */
   function handleCurveUpdate(updatedCurve: StoredCurve) {
     setCurves(prev => prev.map(c => (c.id === updatedCurve.id ? updatedCurve : c)))
+  }
+
+  function handleVehicleSelect(id: string | null) {
+    setSelectedVehicleId(id)
+  }
+
+  function handleVehicleEndSet(vehicleId: string, lineId: string, offset: number) {
+    const line = lines.find(l => l.id === lineId)
+    if (!line) return
+    const position = getPositionFromOffset(line, offset)
+    setVehicleEndPoints(prev => ({ ...prev, [vehicleId]: { lineId, offset, position } }))
+  }
+
+  function handleVehicleEndDelete(vehicleId: string) {
+    setVehicleEndPoints(prev => {
+      const next = { ...prev }
+      delete next[vehicleId]
+      return next
+    })
   }
 
   function handleCopySnapshot() {
@@ -116,11 +147,17 @@ export default function App() {
           mode={mode}
           maxWheelbase={maxWheelbase}
           tangentMode={tangentMode}
+          graph={graph}
+          selectedVehicleId={selectedVehicleId}
+          vehicleEndPoints={vehicleEndPoints}
           onLineAdd={line => setLines(prev => [...prev, line])}
           onCurveAdd={curve => setCurves(prev => [...prev, curve])}
           onLineUpdate={handleLineUpdate}
           onCurveUpdate={handleCurveUpdate}
           onVehicleAdd={vehicle => setVehicles(prev => [...prev, vehicle])}
+          onVehicleUpdate={vehicle => setVehicles(prev => prev.map(v => v.id === vehicle.id ? vehicle : v))}
+          onVehicleSelect={handleVehicleSelect}
+          onVehicleEndSet={handleVehicleEndSet}
         />
       </div>
 
@@ -131,11 +168,15 @@ export default function App() {
         tangentMode={tangentMode}
         lineCount={lines.length}
         curveCount={curves.length}
-        vehicleCount={vehicles.length}
+        vehicles={vehicles}
+        vehicleEndPoints={vehicleEndPoints}
+        selectedVehicleId={selectedVehicleId}
         graphNodeCount={graph.adjacency.size}
         onModeChange={setMode}
         onMaxWheelbaseChange={setMaxWheelbase}
         onTangentModeChange={setTangentMode}
+        onVehicleSelect={handleVehicleSelect}
+        onVehicleEndDelete={handleVehicleEndDelete}
         onCopySnapshot={handleCopySnapshot}
       />
     </div>
