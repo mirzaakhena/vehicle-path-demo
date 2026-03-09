@@ -311,8 +311,7 @@ export function Canvas({
       const hit = findLineHit(mouse)
       if (hit) {
         const len = getLineLength(hit.line)
-        const wb  = maxWheelbaseRef.current
-        if (hit.offset >= wb && hit.offset <= len) {
+        if (hit.offset <= len) {
           setCurveDrag({
             fromLineId: hit.line.id,
             fromOffset: hit.offset,
@@ -477,8 +476,7 @@ export function Canvas({
         const hit = findLineHit(mouse)
         if (hit) {
           const len = getLineLength(hit.line)
-          const wb  = maxWheelbaseRef.current
-          if (hit.offset >= wb && hit.offset <= len) {
+          if (hit.offset <= len) {
             setCurveHover({ lineId: hit.line.id, offset: hit.offset, point: hit.point })
           } else {
             setCurveHover(null)
