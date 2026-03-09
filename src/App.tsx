@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import type { Line } from 'vehicle-path2/core'
-import { buildGraph, createBezierCurve, serializeScene } from 'vehicle-path2/core'
+import { buildGraph, createBezierCurve, serializeScene, getPositionFromOffset } from 'vehicle-path2/core'
 import type { Mode, StoredCurve, TangentMode, PlacedVehicle } from './types'
 import { Canvas } from './components/Canvas'
 import { Panel } from './components/Panel'
@@ -70,8 +70,18 @@ export default function App() {
       }
     })
 
+    const updatedVehicles = vehicles.map(v => ({
+      ...v,
+      axles: v.axles.map(a =>
+        a.lineId === updatedLine.id
+          ? { ...a, position: getPositionFromOffset(updatedLine, a.offset) }
+          : a
+      ),
+    }))
+
     setLines(updatedLines)
     setCurves(updatedCurves)
+    setVehicles(updatedVehicles)
   }
 
   /**
