@@ -7,6 +7,7 @@ interface Props {
   tangentMode: TangentMode
   lineCount: number
   curveCount: number
+  vehicleCount: number
   graphNodeCount: number
   onModeChange: (m: Mode) => void
   onWheelbaseChange: (v: number) => void
@@ -19,6 +20,7 @@ export function Panel({
   tangentMode,
   lineCount,
   curveCount,
+  vehicleCount,
   graphNodeCount,
   onModeChange,
   onWheelbaseChange,
@@ -103,9 +105,10 @@ export function Panel({
           <div style={{ display: 'flex', gap: 4 }}>
             {(
               [
-                { id: 'drag', symbol: '↖', label: 'Drag' },
-                { id: 'line', symbol: '/', label: 'Line' },
-                { id: 'curve', symbol: '~', label: 'Curve' },
+                { id: 'drag',    symbol: '↖', label: 'Drag'    },
+                { id: 'line',    symbol: '/', label: 'Line'    },
+                { id: 'curve',   symbol: '~', label: 'Curve'   },
+                { id: 'vehicle', symbol: '◉', label: 'Vehicle' },
               ] as { id: Mode; symbol: string; label: string }[]
             ).map(({ id, symbol, label }) => {
               const active = mode === id
@@ -249,6 +252,22 @@ export function Panel({
           </div>
         </section>
 
+        {/* ── Vehicles ── */}
+        <section>
+          <SectionLabel>Vehicles</SectionLabel>
+          <div
+            style={{
+              border: '1px solid #1c2030',
+              padding: '14px 16px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 12,
+            }}
+          >
+            <StatRow label="Placed" value={vehicleCount} highlight={vehicleCount > 0} />
+          </div>
+        </section>
+
         {/* ── Instructions ── */}
         <section style={{ marginTop: 'auto' }}>
           <SectionLabel>Guide</SectionLabel>
@@ -280,6 +299,14 @@ export function Panel({
                 <GuideRow>Drag to a second line</GuideRow>
                 <GuideRow>To valid: [0 → end − wb]</GuideRow>
                 <GuideRow>Release to confirm</GuideRow>
+              </>
+            )}
+            {mode === 'vehicle' && (
+              <>
+                <GuideRow>Hover a line to preview</GuideRow>
+                <GuideRow>Rear valid: [0 → end − wb]</GuideRow>
+                <GuideRow>Front = rear + wheelbase</GuideRow>
+                <GuideRow>Click to place vehicle</GuideRow>
               </>
             )}
           </div>

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import type { Line, Point, BezierCurve, TangentMode } from 'vehicle-path2/core'
-import { createBezierCurve, getLineLength, distance as libDistance } from 'vehicle-path2/core'
-import type { Mode, StoredCurve } from '../types'
+import { createBezierCurve, getLineLength, distance as libDistance, calculateInitialFrontPosition } from 'vehicle-path2/core'
+import type { Mode, StoredCurve, PlacedVehicle } from '../types'
 import { projectPointOnLine, getPointAtOffset } from '../geometry'
 
 // ─── Hit detection radii ─────────────────────────────────────────────────────
@@ -51,11 +51,20 @@ interface CurveDrag {
   } | null
 }
 
+// ─── Vehicle hover preview ────────────────────────────────────────────────────
+
+interface VehicleHover {
+  lineId: string
+  rear:  { offset: number; position: Point }
+  front: { offset: number; position: Point }
+}
+
 // ─── Props ───────────────────────────────────────────────────────────────────
 
 interface Props {
   lines: Line[]
   curves: StoredCurve[]
+  vehicles: PlacedVehicle[]
   mode: Mode
   wheelbase: number
   tangentMode: TangentMode
@@ -63,14 +72,17 @@ interface Props {
   onCurveAdd: (curve: StoredCurve) => void
   onLineUpdate: (line: Line) => void
   onCurveUpdate: (curve: StoredCurve) => void
+  onVehicleAdd: (vehicle: PlacedVehicle) => void
 }
 
 // ─── ID generator ────────────────────────────────────────────────────────────
 
-let lineSeq = 0
-let curveSeq = 0
-const nextLineId  = () => `line-${++lineSeq}`
-const nextCurveId = () => `curve-${++curveSeq}`
+let lineSeq    = 0
+let curveSeq   = 0
+let vehicleSeq = 0
+const nextLineId    = () => `line-${++lineSeq}`
+const nextCurveId   = () => `curve-${++curveSeq}`
+const nextVehicleId = () => `vehicle-${++vehicleSeq}`
 
 // ─── Pure helpers ────────────────────────────────────────────────────────────
 
@@ -122,6 +134,7 @@ function clampEndpoint(proposed: Point, anchor: Point, minDist: number): Point {
 export function Canvas({
   lines,
   curves,
+  vehicles,
   mode,
   wheelbase,
   tangentMode,
@@ -129,6 +142,7 @@ export function Canvas({
   onCurveAdd,
   onLineUpdate,
   onCurveUpdate,
+  onVehicleAdd,
 }: Props) {
   const svgRef = useRef<SVGSVGElement>(null)
 
@@ -139,12 +153,13 @@ export function Canvas({
   const tangentModeRef  = useRef(tangentMode);  tangentModeRef.current  = tangentMode
 
   // ── State ─────────────────────────────────────────────────────────────────
-  const [lineDrawing, setLineDrawing] = useState<LineDrawing | null>(null)
-  const [curveHover,  setCurveHover]  = useState<HoverState | null>(null)
-  const [curveDrag,   setCurveDrag]   = useState<CurveDrag | null>(null)
-  const [activeDrag,  setActiveDrag]  = useState<ActiveDrag | null>(null)
-  const [dragHover,   setDragHover]   = useState<DragHover | null>(null)
-  const [mousePos,    setMousePos]    = useState<Point | null>(null)
+  const [lineDrawing,   setLineDrawing]   = useState<LineDrawing | null>(null)
+  const [curveHover,    setCurveHover]    = useState<HoverState | null>(null)
+  const [curveDrag,     setCurveDrag]     = useState<CurveDrag | null>(null)
+  const [activeDrag,    setActiveDrag]    = useState<ActiveDrag | null>(null)
+  const [dragHover,     setDragHover]     = useState<DragHover | null>(null)
+  const [vehicleHover,  setVehicleHover]  = useState<VehicleHover | null>(null)
+  const [mousePos,      setMousePos]      = useState<Point | null>(null)
 
   // Clear all mode-specific state when mode switches
   useEffect(() => {
@@ -153,6 +168,7 @@ export function Canvas({
     setCurveDrag(null)
     setActiveDrag(null)
     setDragHover(null)
+    setVehicleHover(null)
   }, [mode])
 
   // ── Utilities ──────────────────────────────────────────────────────────────
@@ -308,6 +324,15 @@ export function Canvas({
         }
       }
     }
+
+    // ── Vehicle mode ──
+    if (mode === 'vehicle' && vehicleHover) {
+      onVehicleAdd({
+        id: nextVehicleId(),
+        rear:  { lineId: vehicleHover.lineId, offset: vehicleHover.rear.offset,  position: vehicleHover.rear.position  },
+        front: { lineId: vehicleHover.lineId, offset: vehicleHover.front.offset, position: vehicleHover.front.position },
+      })
+    }
   }
 
   function handleMouseMove(e: React.MouseEvent) {
@@ -395,6 +420,30 @@ export function Canvas({
       return
     }
 
+    // ── Vehicle mode ──
+    if (mode === 'vehicle') {
+      const hit = findLineHit(mouse)
+      if (hit) {
+        const wb       = wheelbaseRef.current
+        const lineLen  = getLineLength(hit.line)
+        const validMax = lineLen - wb
+        // Rear axle valid range: [0, lineLength - wheelbase]
+        if (validMax > 0 && hit.offset >= 0 && hit.offset <= validMax) {
+          const front = calculateInitialFrontPosition(hit.line.id, hit.offset, wb, hit.line)
+          setVehicleHover({
+            lineId: hit.line.id,
+            rear:   { offset: hit.offset,              position: hit.point          },
+            front:  { offset: front.absoluteOffset,    position: front.position     },
+          })
+        } else {
+          setVehicleHover(null)
+        }
+      } else {
+        setVehicleHover(null)
+      }
+      return
+    }
+
     // ── Curve mode ──
     if (mode === 'curve') {
       if (curveDrag) {
@@ -476,8 +525,9 @@ export function Canvas({
     setMousePos(null)
     setActiveDrag(null)
     setDragHover(null)
-    if (mode === 'line')  setLineDrawing(null)
-    if (mode === 'curve') { setCurveHover(null); setCurveDrag(null) }
+    if (mode === 'line')    setLineDrawing(null)
+    if (mode === 'curve')   { setCurveHover(null); setCurveDrag(null) }
+    if (mode === 'vehicle') setVehicleHover(null)
   }
 
   // ── Cursor ────────────────────────────────────────────────────────────────
@@ -490,6 +540,8 @@ export function Canvas({
     cursor = 'crosshair'
   } else if (mode === 'curve') {
     cursor = curveHover || curveDrag ? 'crosshair' : 'default'
+  } else if (mode === 'vehicle') {
+    cursor = vehicleHover ? 'crosshair' : 'default'
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -541,6 +593,41 @@ export function Canvas({
           strokeOpacity={0.65}
         />
       ))}
+
+      {/* ── Placed vehicles ── */}
+      {vehicles.map(v => (
+        <g key={v.id}>
+          {/* Body: line from rear to front */}
+          <line
+            x1={v.rear.position.x}  y1={v.rear.position.y}
+            x2={v.front.position.x} y2={v.front.position.y}
+            stroke="#fb923c" strokeWidth={2.5} strokeLinecap="round"
+          />
+          {/* Rear axle — red donut */}
+          <circle cx={v.rear.position.x}  cy={v.rear.position.y}  r={5} fill="#06080c" stroke="#f87171" strokeWidth={1.8} />
+          <circle cx={v.rear.position.x}  cy={v.rear.position.y}  r={2} fill="#f87171" />
+          {/* Front axle — amber donut */}
+          <circle cx={v.front.position.x} cy={v.front.position.y} r={5} fill="#06080c" stroke="#fbbf24" strokeWidth={1.8} />
+          <circle cx={v.front.position.x} cy={v.front.position.y} r={2} fill="#fbbf24" />
+        </g>
+      ))}
+
+      {/* ── Vehicle hover preview ── */}
+      {vehicleHover && (
+        <g>
+          {/* Body preview */}
+          <line
+            x1={vehicleHover.rear.position.x}  y1={vehicleHover.rear.position.y}
+            x2={vehicleHover.front.position.x} y2={vehicleHover.front.position.y}
+            stroke="#fb923c" strokeWidth={2.5} strokeLinecap="round"
+            strokeOpacity={0.45} strokeDasharray="6 3"
+          />
+          {/* Rear axle preview */}
+          <circle cx={vehicleHover.rear.position.x}  cy={vehicleHover.rear.position.y}  r={5} fill="#06080c" stroke="#f87171" strokeWidth={1.8} strokeOpacity={0.55} />
+          {/* Front axle preview */}
+          <circle cx={vehicleHover.front.position.x} cy={vehicleHover.front.position.y} r={5} fill="#06080c" stroke="#fbbf24" strokeWidth={1.8} strokeOpacity={0.55} />
+        </g>
+      )}
 
       {/* ── Stored lines ── */}
       {lines.map(line => {

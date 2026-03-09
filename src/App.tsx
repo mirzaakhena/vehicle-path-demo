@@ -1,13 +1,14 @@
 import { useState, useMemo } from 'react'
 import type { Line } from 'vehicle-path2/core'
 import { buildGraph, createBezierCurve } from 'vehicle-path2/core'
-import type { Mode, StoredCurve, TangentMode } from './types'
+import type { Mode, StoredCurve, TangentMode, PlacedVehicle } from './types'
 import { Canvas } from './components/Canvas'
 import { Panel } from './components/Panel'
 
 export default function App() {
   const [lines, setLines] = useState<Line[]>([])
   const [curves, setCurves] = useState<StoredCurve[]>([])
+  const [vehicles, setVehicles] = useState<PlacedVehicle[]>([])
   const [mode, setMode] = useState<Mode>('drag')
   const [wheelbase, setWheelbase] = useState(10)
   const [tangentMode, setTangentMode] = useState<TangentMode>('proportional-40')
@@ -96,6 +97,7 @@ export default function App() {
         <Canvas
           lines={lines}
           curves={curves}
+          vehicles={vehicles}
           mode={mode}
           wheelbase={wheelbase}
           tangentMode={tangentMode}
@@ -103,6 +105,7 @@ export default function App() {
           onCurveAdd={curve => setCurves(prev => [...prev, curve])}
           onLineUpdate={handleLineUpdate}
           onCurveUpdate={handleCurveUpdate}
+          onVehicleAdd={vehicle => setVehicles(prev => [...prev, vehicle])}
         />
       </div>
 
@@ -113,6 +116,7 @@ export default function App() {
         tangentMode={tangentMode}
         lineCount={lines.length}
         curveCount={curves.length}
+        vehicleCount={vehicles.length}
         graphNodeCount={graph.adjacency.size}
         onModeChange={setMode}
         onWheelbaseChange={setWheelbase}
