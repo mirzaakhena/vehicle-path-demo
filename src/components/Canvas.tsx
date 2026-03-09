@@ -199,17 +199,16 @@ export function Canvas({
    * curve offsets remain within valid range.
    *
    * - As FROM line: fromOffset must be <= lineLength  → min = max(fromOffsets)
-   * - As TO   line: toOffset + wheelbase <= lineLength → min = max(toOffsets + wb)
+   * - As TO   line: toOffset must be <= lineLength    → min = max(toOffsets)
    */
   function computeMinLineLength(lineId: string): number {
-    const wb = maxWheelbaseRef.current
     let min = 5  // always allow at least 5px
     for (const curve of curvesRef.current) {
       if (curve.fromLineId === lineId) {
         min = Math.max(min, curve.fromOffset)
       }
       if (curve.toLineId === lineId) {
-        min = Math.max(min, curve.toOffset + wb)
+        min = Math.max(min, curve.toOffset)
       }
     }
     return min
