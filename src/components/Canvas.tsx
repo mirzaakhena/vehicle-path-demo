@@ -389,20 +389,16 @@ export function Canvas({
           const toLine   = linesRef.current.find(l => l.id === activeDrag.toLineId)!
           const { offset } = projectPointOnLine(mouse, toLine)
           const toLen      = getLineLength(toLine)
-          const validMax   = toLen - wb
-          if (validMax > 0) {
-            // Valid to-range: [0, lineLength - wheelbase]
-            const clamped = Math.max(0, Math.min(offset, validMax))
-            try {
-              const bezier = createBezierCurve(
-                fromLine, toLine,
-                { maxWheelbase: wb, tangentMode: tm },
-                false,
-                { fromOffset: curve.fromOffset, fromIsPercentage: false, toOffset: clamped, toIsPercentage: false }
-              )
-              onCurveUpdate({ ...curve, toOffset: clamped, bezier })
-            } catch { /* degenerate geometry — skip */ }
-          }
+          const clamped = Math.max(0, Math.min(offset, toLen))
+          try {
+            const bezier = createBezierCurve(
+              fromLine, toLine,
+              { maxWheelbase: wb, tangentMode: tm },
+              false,
+              { fromOffset: curve.fromOffset, fromIsPercentage: false, toOffset: clamped, toIsPercentage: false }
+            )
+            onCurveUpdate({ ...curve, toOffset: clamped, bezier })
+          } catch { /* degenerate geometry — skip */ }
         }
       } else {
         // No active drag — update hover highlight
@@ -453,9 +449,8 @@ export function Canvas({
         const hit = findLineHit(mouse, curveDrag.fromLineId)
 
         if (hit) {
-          const len      = getLineLength(hit.line)
-          const validMax = len - wb
-          if (validMax > 0 && hit.offset >= 0 && hit.offset <= validMax) {
+          const len = getLineLength(hit.line)
+          if (hit.offset >= 0 && hit.offset <= len) {
             const fromLine = linesRef.current.find(l => l.id === curveDrag.fromLineId)!
             try {
               const bezier = createBezierCurve(
