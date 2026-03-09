@@ -370,8 +370,7 @@ export function Canvas({
           const toLine   = linesRef.current.find(l => l.id === activeDrag.toLineId)!
           const { offset } = projectPointOnLine(mouse, fromLine)
           const fromLen    = getLineLength(fromLine)
-          // Valid from-range: [wheelbase, lineLength]
-          const clamped = Math.max(wb, Math.min(offset, fromLen))
+          const clamped = Math.max(0, Math.min(offset, fromLen))
           try {
             const bezier = createBezierCurve(
               fromLine, toLine,
