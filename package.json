@@ -11,7 +11,7 @@
   "dependencies": {
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "vehicle-path2": "^1.0.15"
+    "vehicle-path2": "^2.0.0"
   },
   "devDependencies": {
     "@types/react": "^19.0.0",
