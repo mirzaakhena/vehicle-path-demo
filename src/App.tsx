@@ -169,8 +169,7 @@ export default function App() {
     const state = engine.initializeVehicle(rearAxle.lineId, rearAxle.offset, vehicle.axleSpacings)
     if (!state) return
 
-    const totalSpacing = vehicle.axleSpacings.reduce((a, b) => a + b, 0)
-    const exec = engine.preparePath(state, endPoint.lineId, endPoint.offset + totalSpacing)
+    const exec = engine.preparePath(state, endPoint.lineId, endPoint.offset)
     if (!exec) return
 
     vehicleOriginRef.current = vehicle
