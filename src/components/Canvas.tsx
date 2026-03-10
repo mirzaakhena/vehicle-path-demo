@@ -83,6 +83,7 @@ interface Props {
   onVehicleUpdate: (vehicle: PlacedVehicle) => void
   onVehicleSelect: (id: string | null) => void
   onVehicleEndSet: (vehicleId: string, lineId: string, offset: number) => void
+  locked: boolean
 }
 
 // ─── ID generator ────────────────────────────────────────────────────────────
@@ -159,6 +160,7 @@ export function Canvas({
   onVehicleUpdate,
   onVehicleSelect,
   onVehicleEndSet,
+  locked,
 }: Props) {
   const svgRef = useRef<SVGSVGElement>(null)
 
@@ -297,7 +299,7 @@ export function Canvas({
   // ── Event handlers ─────────────────────────────────────────────────────────
 
   function handleMouseDown(e: React.MouseEvent) {
-    if (e.button !== 0) return
+    if (e.button !== 0 || locked) return
     const mouse = getSvgPos(e)
 
     // ── Drag mode ──
@@ -409,6 +411,7 @@ export function Canvas({
   }
 
   function handleMouseMove(e: React.MouseEvent) {
+    if (locked) return
     const mouse = getSvgPos(e)
     setMousePos(mouse)
 
@@ -648,7 +651,7 @@ export function Canvas({
   }
 
   function handleMouseUp(e: React.MouseEvent) {
-    if (e.button !== 0) return
+    if (e.button !== 0 || locked) return
 
     if (mode === 'drag') {
       if (activeDrag?.type === 'vehicle-end') {
@@ -699,9 +702,10 @@ export function Canvas({
   // ── Cursor ────────────────────────────────────────────────────────────────
 
   let cursor = 'default'
-  if (mode === 'drag') {
+  if (locked) {
+    cursor = 'not-allowed'
+  } else if (mode === 'drag') {
     if (activeDrag) cursor = 'grabbing'
-    else if (dragHover?.type === 'vehicle-body' || dragHover?.type === 'vehicle-end') cursor = 'grab'
     else if (dragHover) cursor = 'grab'
   } else if (mode === 'line') {
     cursor = 'crosshair'

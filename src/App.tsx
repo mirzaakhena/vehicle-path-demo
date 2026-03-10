@@ -1,6 +1,7 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import type { Line } from 'vehicle-path2/core'
-import { buildGraph, createBezierCurve, serializeScene, getPositionFromOffset, calculateInitialAxlePositions } from 'vehicle-path2/core'
+import { buildGraph, createBezierCurve, serializeScene, getPositionFromOffset, calculateInitialAxlePositions, PathEngine } from 'vehicle-path2/core'
+import type { VehiclePathState, PathExecution } from 'vehicle-path2/core'
 import type { Mode, StoredCurve, TangentMode, PlacedVehicle, VehicleEndPoint } from './types'
 import { Canvas } from './components/Canvas'
 import { Panel } from './components/Panel'
@@ -14,6 +15,17 @@ export default function App() {
   const [tangentMode, setTangentMode] = useState<TangentMode>('proportional-40')
   const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null)
   const [vehicleEndPoints, setVehicleEndPoints] = useState<Record<string, VehicleEndPoint>>({})
+  const [animatingVehicleId, setAnimatingVehicleId] = useState<string | null>(null)
+  const [vehicleOriginId, setVehicleOriginId] = useState<string | null>(null)
+  const [vehicleSpeed, setVehicleSpeed] = useState(80)
+
+  // ── Animation refs ──────────────────────────────────────────────────────────
+  const rafRef           = useRef<number | null>(null)
+  const engineRef        = useRef<PathEngine | null>(null)
+  const animStateRef     = useRef<{ vehicleId: string; state: VehiclePathState; exec: PathExecution } | null>(null)
+  const vehicleOriginRef = useRef<PlacedVehicle | null>(null)
+  const lastTimestampRef = useRef<number | null>(null)
+  const vehicleSpeedRef  = useRef(vehicleSpeed); vehicleSpeedRef.current = vehicleSpeed
 
   // Keep the graph up-to-date as scene changes — maximizing library usage
   const graph = useMemo(
@@ -137,6 +149,96 @@ export default function App() {
     })
   }
 
+  function handleVehiclePlay(vehicleId: string) {
+    const vehicle = vehicles.find(v => v.id === vehicleId)
+    const endPoint = vehicleEndPoints[vehicleId]
+    if (!vehicle || !endPoint) return
+
+    const engine = new PathEngine({ maxWheelbase, tangentMode })
+    engine.setScene(lines, curves.map(c => ({
+      fromLineId: c.fromLineId,
+      toLineId: c.toLineId,
+      fromOffset: c.fromOffset,
+      fromIsPercentage: false,
+      toOffset: c.toOffset,
+      toIsPercentage: false,
+    })))
+    engineRef.current = engine
+
+    const rearAxle = vehicle.axles[vehicle.axles.length - 1]
+    const state = engine.initializeVehicle(rearAxle.lineId, rearAxle.offset, vehicle.axleSpacings)
+    if (!state) return
+
+    const totalSpacing = vehicle.axleSpacings.reduce((a, b) => a + b, 0)
+    const exec = engine.preparePath(state, endPoint.lineId, endPoint.offset + totalSpacing)
+    if (!exec) return
+
+    vehicleOriginRef.current = vehicle
+    animStateRef.current = { vehicleId, state, exec }
+    lastTimestampRef.current = null
+    setVehicleOriginId(vehicleId)
+    setAnimatingVehicleId(vehicleId)
+  }
+
+  function handleVehicleReset(vehicleId: string) {
+    if (rafRef.current !== null) {
+      cancelAnimationFrame(rafRef.current)
+      rafRef.current = null
+    }
+    setAnimatingVehicleId(null)
+    animStateRef.current = null
+    const origin = vehicleOriginRef.current
+    if (origin && origin.id === vehicleId) {
+      setVehicles(prev => prev.map(v => v.id === vehicleId ? origin : v))
+      vehicleOriginRef.current = null
+      setVehicleOriginId(null)
+    }
+  }
+
+  // ── Animation RAF loop ──────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!animatingVehicleId) return
+
+    function tick(timestamp: number) {
+      const anim = animStateRef.current
+      const engine = engineRef.current
+      if (!anim || !engine) return
+
+      const last = lastTimestampRef.current
+      lastTimestampRef.current = timestamp
+      if (last === null) {
+        rafRef.current = requestAnimationFrame(tick)
+        return
+      }
+
+      const deltaTime = Math.min((timestamp - last) / 1000, 0.1)
+      const result = engine.moveVehicle(anim.state, anim.exec, vehicleSpeedRef.current * deltaTime)
+      animStateRef.current = { ...anim, state: result.state, exec: result.execution }
+
+      setVehicles(prev => prev.map(v =>
+        v.id === anim.vehicleId
+          ? { ...v, axles: result.state.axles.map(a => ({ lineId: a.lineId, offset: a.offset, position: a.position })) }
+          : v
+      ))
+
+      if (result.arrived) {
+        setAnimatingVehicleId(null)
+        animStateRef.current = null
+        return
+      }
+
+      rafRef.current = requestAnimationFrame(tick)
+    }
+
+    rafRef.current = requestAnimationFrame(tick)
+    return () => {
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current)
+        rafRef.current = null
+      }
+    }
+  }, [animatingVehicleId])
+
   function handleCopySnapshot() {
     const json = serializeScene(lines, curves, vehicles)
     navigator.clipboard.writeText(json)
@@ -172,6 +274,7 @@ export default function App() {
           onVehicleUpdate={vehicle => setVehicles(prev => prev.map(v => v.id === vehicle.id ? vehicle : v))}
           onVehicleSelect={handleVehicleSelect}
           onVehicleEndSet={handleVehicleEndSet}
+          locked={animatingVehicleId !== null}
         />
       </div>
 
@@ -189,8 +292,14 @@ export default function App() {
         onModeChange={setMode}
         onMaxWheelbaseChange={setMaxWheelbase}
         onTangentModeChange={setTangentMode}
+        animatingVehicleId={animatingVehicleId}
+        vehicleOriginId={vehicleOriginId}
+        vehicleSpeed={vehicleSpeed}
         onVehicleSelect={handleVehicleSelect}
         onVehicleEndDelete={handleVehicleEndDelete}
+        onVehiclePlay={handleVehiclePlay}
+        onVehicleReset={handleVehicleReset}
+        onVehicleSpeedChange={setVehicleSpeed}
         onCopySnapshot={handleCopySnapshot}
       />
     </div>

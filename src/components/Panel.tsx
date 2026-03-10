@@ -10,12 +10,18 @@ interface Props {
   vehicles: PlacedVehicle[]
   vehicleEndPoints: Record<string, VehicleEndPoint>
   selectedVehicleId: string | null
+  animatingVehicleId: string | null
+  vehicleOriginId: string | null
+  vehicleSpeed: number
   graphNodeCount: number
   onModeChange: (m: Mode) => void
   onMaxWheelbaseChange: (v: number) => void
   onTangentModeChange: (t: TangentMode) => void
   onVehicleSelect: (id: string | null) => void
   onVehicleEndDelete: (vehicleId: string) => void
+  onVehiclePlay: (id: string) => void
+  onVehicleReset: (id: string) => void
+  onVehicleSpeedChange: (speed: number) => void
   onCopySnapshot: () => void
 }
 
@@ -28,12 +34,18 @@ export function Panel({
   vehicles,
   vehicleEndPoints,
   selectedVehicleId,
+  animatingVehicleId,
+  vehicleOriginId,
+  vehicleSpeed,
   graphNodeCount,
   onModeChange,
   onMaxWheelbaseChange,
   onTangentModeChange,
   onVehicleSelect,
   onVehicleEndDelete,
+  onVehiclePlay,
+  onVehicleReset,
+  onVehicleSpeedChange,
   onCopySnapshot,
 }: Props) {
   const [copied, setCopied] = useState(false)
@@ -181,12 +193,33 @@ export function Panel({
             </div>
           </div>
 
+          {/* Speed slider */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
+              <span style={labelStyle}>Speed</span>
+              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 16, color: '#fb923c', letterSpacing: 1 }}>
+                {vehicleSpeed}<span style={{ fontSize: 11, color: '#4a5878', marginLeft: 3 }}>px/s</span>
+              </span>
+            </div>
+            <input type="range" min={10} max={300} step={10} value={vehicleSpeed}
+              onChange={e => onVehicleSpeedChange(Number(e.target.value))}
+              disabled={animatingVehicleId !== null}
+            />
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
+              <Muted>10px/s</Muted><Muted>300px/s</Muted>
+            </div>
+          </div>
+
           <VehicleList
             vehicles={vehicles}
             vehicleEndPoints={vehicleEndPoints}
             selectedVehicleId={selectedVehicleId}
+            animatingVehicleId={animatingVehicleId}
+            vehicleOriginId={vehicleOriginId}
             onSelect={onVehicleSelect}
             onDeleteEnd={onVehicleEndDelete}
+            onPlay={onVehiclePlay}
+            onReset={onVehicleReset}
           />
         </section>
 
@@ -367,64 +400,106 @@ function VehicleList({
   vehicles,
   vehicleEndPoints,
   selectedVehicleId,
+  animatingVehicleId,
+  vehicleOriginId,
   onSelect,
   onDeleteEnd,
+  onPlay,
+  onReset,
 }: {
   vehicles: PlacedVehicle[]
   vehicleEndPoints: Record<string, VehicleEndPoint>
   selectedVehicleId: string | null
+  animatingVehicleId: string | null
+  vehicleOriginId: string | null
   onSelect: (id: string | null) => void
   onDeleteEnd: (id: string) => void
+  onPlay: (id: string) => void
+  onReset: (id: string) => void
 }) {
   if (vehicles.length === 0) {
     return <Muted>No vehicles placed</Muted>
   }
+  const isLocked = animatingVehicleId !== null
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
       {vehicles.map((v, i) => {
         const selected = selectedVehicleId === v.id
         const endPoint = vehicleEndPoints[v.id]
+        const isAnimating = animatingVehicleId === v.id
+        const hasOrigin = vehicleOriginId === v.id
+        const canPlay = !!endPoint && !isLocked
+        const canReset = hasOrigin && !isAnimating
+
         return (
           <div
             key={v.id}
-            onClick={() => onSelect(selected ? null : v.id)}
+            onClick={() => !isLocked && onSelect(selected ? null : v.id)}
             style={{
               padding: '8px 10px',
-              border: `1px solid ${selected ? '#fb923c' : '#1c2030'}`,
-              background: selected ? '#fb923c10' : 'transparent',
-              cursor: 'pointer',
+              border: `1px solid ${isAnimating ? '#4ade80' : selected ? '#fb923c' : '#1c2030'}`,
+              background: isAnimating ? '#4ade8008' : selected ? '#fb923c10' : 'transparent',
+              cursor: isLocked ? 'default' : 'pointer',
               transition: 'all 0.12s ease',
               display: 'flex',
               flexDirection: 'column',
               gap: 4,
             }}
           >
+            {/* Header row: V label + status + play/reset */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: selected ? '#fb923c' : '#8899aa', letterSpacing: 1 }}>
+              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: isAnimating ? '#4ade80' : selected ? '#fb923c' : '#8899aa', letterSpacing: 1 }}>
                 V{i + 1}
               </span>
-              {selected && (
-                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: '#fb923c', opacity: 0.7, letterSpacing: 1 }}>
-                  SELECTED
-                </span>
-              )}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                {isAnimating && (
+                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: '#4ade80', opacity: 0.8, letterSpacing: 1 }}>
+                    MOVING
+                  </span>
+                )}
+                {!isAnimating && selected && (
+                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: '#fb923c', opacity: 0.7, letterSpacing: 1 }}>
+                    SELECTED
+                  </span>
+                )}
+                {/* Reset button */}
+                {canReset && (
+                  <button
+                    onClick={e => { e.stopPropagation(); onReset(v.id) }}
+                    style={iconButtonStyle('#4a5878')}
+                    title="Reset to start"
+                  >↺</button>
+                )}
+                {/* Play button */}
+                {canPlay && (
+                  <button
+                    onClick={e => { e.stopPropagation(); onPlay(v.id) }}
+                    style={iconButtonStyle('#4ade80')}
+                    title="Play"
+                  >▶</button>
+                )}
+              </div>
             </div>
+
+            {/* Front axle info */}
             <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: '#4a5878' }}>
               front: {v.axles[0].lineId.slice(-4)} @{Math.round(v.axles[0].offset)}
             </div>
+
+            {/* End point row */}
             {endPoint ? (
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: '#4ade80' }}>
                   end: {endPoint.lineId.slice(-4)} @{Math.round(endPoint.offset)}
                 </span>
-                <button
-                  onClick={e => { e.stopPropagation(); onDeleteEnd(v.id) }}
-                  style={{
-                    background: 'none', border: 'none', color: '#4a5878',
-                    cursor: 'pointer', fontSize: 11, padding: '0 2px',
-                  }}
-                  title="Remove end point"
-                >×</button>
+                {!isLocked && (
+                  <button
+                    onClick={e => { e.stopPropagation(); onDeleteEnd(v.id) }}
+                    style={{ background: 'none', border: 'none', color: '#4a5878', cursor: 'pointer', fontSize: 11, padding: '0 2px' }}
+                    title="Remove end point"
+                  >×</button>
+                )}
               </div>
             ) : (
               <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: '#3a4a5e' }}>
@@ -436,6 +511,21 @@ function VehicleList({
       })}
     </div>
   )
+}
+
+function iconButtonStyle(color: string): CSSProperties {
+  return {
+    background: 'none',
+    border: `1px solid ${color}40`,
+    color,
+    cursor: 'pointer',
+    fontSize: 11,
+    padding: '1px 5px',
+    lineHeight: 1.4,
+    fontFamily: "'JetBrains Mono', monospace",
+    transition: 'all 0.12s ease',
+    outline: 'none',
+  }
 }
 
 function SectionLabel({
