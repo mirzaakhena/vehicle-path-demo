@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import type { Line, Point, BezierCurve, TangentMode, Graph } from 'vehicle-path2/core'
+import type { Line, Point, BezierCurve, TangentMode, Graph, Curve } from 'vehicle-path2/core'
 import { createBezierCurve, getLineLength, distance as libDistance, calculateInitialAxlePositions, findPath, projectPointOnLine, getPositionFromOffset, computeMinLineLength } from 'vehicle-path2/core'
 import type { Mode, StoredCurve, PlacedVehicle, VehicleEndPoint } from '../types'
 
