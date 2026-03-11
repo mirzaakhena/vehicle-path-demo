@@ -1,8 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import type { Line, Point, BezierCurve, TangentMode, Graph } from 'vehicle-path2/core'
-import { createBezierCurve, getLineLength, distance as libDistance, calculateInitialAxlePositions, findPath } from 'vehicle-path2/core'
+import { createBezierCurve, getLineLength, distance as libDistance, calculateInitialAxlePositions, findPath, projectPointOnLine, getPositionFromOffset } from 'vehicle-path2/core'
 import type { Mode, StoredCurve, PlacedVehicle, VehicleEndPoint } from '../types'
-import { projectPointOnLine, getPointAtOffset } from '../geometry'
 
 // ─── Hit detection radii ─────────────────────────────────────────────────────
 
@@ -212,7 +211,7 @@ export function Canvas({
       if (line.id === excludeId) continue
       const { offset, distance } = projectPointOnLine(mouse, line)
       if (distance < LINE_HIT_D && (best === null || distance < best.dist)) {
-        best = { line, offset, point: getPointAtOffset(line, offset), dist: distance }
+        best = { line, offset, point: getPositionFromOffset(line, offset), dist: distance }
       }
     }
     return best ? { line: best.line, offset: best.offset, point: best.point } : null
