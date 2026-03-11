@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import type { Line, Point, BezierCurve, TangentMode, Graph } from 'vehicle-path2/core'
-import { createBezierCurve, getLineLength, distance as libDistance, calculateInitialAxlePositions, findPath, projectPointOnLine, getPositionFromOffset } from 'vehicle-path2/core'
+import { createBezierCurve, getLineLength, distance as libDistance, calculateInitialAxlePositions, findPath, projectPointOnLine, getPositionFromOffset, computeMinLineLength } from 'vehicle-path2/core'
 import type { Mode, StoredCurve, PlacedVehicle, VehicleEndPoint } from '../types'
 
 // ─── Hit detection radii ─────────────────────────────────────────────────────
@@ -224,20 +224,7 @@ export function Canvas({
    * - As FROM line: fromOffset must be <= lineLength  → min = max(fromOffsets)
    * - As TO   line: toOffset must be <= lineLength    → min = max(toOffsets)
    */
-  function computeMinLineLength(lineId: string): number {
-    let min = 5  // always allow at least 5px
-    for (const curve of curvesRef.current) {
-      if (curve.fromLineId === lineId) {
-        min = Math.max(min, curve.fromOffset)
-      }
-      if (curve.toLineId === lineId) {
-        min = Math.max(min, curve.toOffset)
-      }
-    }
-    return min
-  }
-
-  /**
+/**
    * Determine what draggable element is under the cursor.
    * Priority: curve endpoints > line endpoints > line body.
    */
@@ -321,13 +308,15 @@ export function Canvas({
         setActiveDrag({
           type: 'line-start',
           lineId: target.lineId,
-          minLength: computeMinLineLength(target.lineId),
+          // Math.max(5, ...) preserves the 5px floor that was hardcoded in the old local function
+          minLength: Math.max(5, computeMinLineLength(target.lineId, curvesRef.current as Curve[])),
         })
       } else if (target.type === 'line-end') {
         setActiveDrag({
           type: 'line-end',
           lineId: target.lineId,
-          minLength: computeMinLineLength(target.lineId),
+          // Math.max(5, ...) preserves the 5px floor that was hardcoded in the old local function
+          minLength: Math.max(5, computeMinLineLength(target.lineId, curvesRef.current as Curve[])),
         })
       } else if (target.type === 'line-body') {
         const line = linesRef.current.find(l => l.id === target.lineId)!
