@@ -166,7 +166,7 @@ export default function App() {
     engineRef.current = engine
 
     const rearAxle = vehicle.axles[vehicle.axles.length - 1]
-    const state = engine.initializeVehicle(rearAxle.lineId, rearAxle.offset, vehicle.axleSpacings)
+    const state = engine.initializeVehicle(rearAxle.lineId, rearAxle.offset, vehicle)
     if (!state) return
 
     const exec = engine.preparePath(state, endPoint.lineId, endPoint.offset)
@@ -239,7 +239,7 @@ export default function App() {
   }, [animatingVehicleId])
 
   function handleCopySnapshot() {
-    const json = serializeScene(lines, curves, vehicles)
+    const json = serializeScene(lines, curves)
     navigator.clipboard.writeText(json)
   }
 
