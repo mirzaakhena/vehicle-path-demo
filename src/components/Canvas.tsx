@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import type { Line, Point, BezierCurve, TangentMode, Graph, Curve } from 'vehicle-path2/core'
-import { createBezierCurve, getLineLength, distance as libDistance, calculateInitialAxlePositions, findPath, projectPointOnLine, getPositionFromOffset, computeMinLineLength } from 'vehicle-path2/core'
+import { createBezierCurve, getLineLength, distance as libDistance, calculateInitialAxlePositions, findPath, projectPointOnLine, getPositionFromOffset, computeMinLineLength, getValidRearOffsetRange } from 'vehicle-path2/core'
 import type { Mode, StoredCurve, PlacedVehicle, VehicleEndPoint } from '../types'
 
 // ─── Hit detection radii ─────────────────────────────────────────────────────
@@ -469,9 +469,8 @@ export function Canvas({
           const line = linesRef.current.find(l => l.id === activeDrag.lineId)
           if (!vehicle || !line) return
           const { offset } = projectPointOnLine(mouse, line)
-          const lineLen = getLineLength(line)
-          const totalSpacing = vehicle.axleSpacings.reduce((a, b) => a + b, 0)
-          const rearOffset = Math.max(0, Math.min(offset, lineLen - totalSpacing))
+          const [, maxOffset] = getValidRearOffsetRange(line, vehicle.axleSpacings)
+          const rearOffset = Math.max(0, Math.min(offset, maxOffset))
           const axleStates = calculateInitialAxlePositions(line.id, rearOffset, vehicle.axleSpacings, line)
           onVehicleUpdate({
             ...vehicle,
@@ -483,13 +482,13 @@ export function Canvas({
           if (!vehicle) return
           const hit = findLineHit(mouse)
           if (hit) {
-            const totalSpacing = vehicle.axleSpacings.reduce((a, b) => a + b, 0)
+            const [, maxOffset] = getValidRearOffsetRange(hit.line, vehicle.axleSpacings)
             const lineLen = getLineLength(hit.line)
             const rearOffset = hit.offset
-            if (rearOffset < 0 || rearOffset > lineLen - totalSpacing) {
+            if (rearOffset < 0 || rearOffset > maxOffset) {
               setVehicleEndHover(null); return
             }
-            const frontEndOffset = rearOffset + totalSpacing
+            const frontEndOffset = rearOffset + (lineLen - maxOffset)
             const front = vehicle.axles[0]
             const path = findPath(
               graphRef.current,
@@ -543,13 +542,13 @@ export function Canvas({
       if (!vehicle) { setVehicleEndHover(null); return }
       const hit = findLineHit(mouse)
       if (hit) {
-        const totalSpacing = vehicle.axleSpacings.reduce((a, b) => a + b, 0)
+        const [, maxOffset] = getValidRearOffsetRange(hit.line, vehicle.axleSpacings)
         const lineLen = getLineLength(hit.line)
         const rearOffset = hit.offset
-        if (rearOffset < 0 || rearOffset > lineLen - totalSpacing) {
+        if (rearOffset < 0 || rearOffset > maxOffset) {
           setVehicleEndHover(null); return
         }
-        const frontEndOffset = rearOffset + totalSpacing
+        const frontEndOffset = rearOffset + (lineLen - maxOffset)
         const front = vehicle.axles[0]
         const path = findPath(
           graphRef.current,
