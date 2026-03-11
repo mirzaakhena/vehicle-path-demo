@@ -218,13 +218,6 @@ export function Canvas({
   }
 
   /**
-   * Compute the minimum allowed length for a line so that all attached
-   * curve offsets remain within valid range.
-   *
-   * - As FROM line: fromOffset must be <= lineLength  → min = max(fromOffsets)
-   * - As TO   line: toOffset must be <= lineLength    → min = max(toOffsets)
-   */
-/**
    * Determine what draggable element is under the cursor.
    * Priority: curve endpoints > line endpoints > line body.
    */
