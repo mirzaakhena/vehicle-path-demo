@@ -70,6 +70,7 @@ interface Props {
   vehicles: PlacedVehicle[]
   mode: Mode
   maxWheelbase: number
+  axleSpacings: number[]
   tangentMode: TangentMode
   graph: Graph
   selectedVehicleId: string | null
@@ -147,6 +148,7 @@ export function Canvas({
   vehicles,
   mode,
   maxWheelbase,
+  axleSpacings,
   tangentMode,
   graph,
   selectedVehicleId,
@@ -168,6 +170,7 @@ export function Canvas({
   const curvesRef             = useRef(curves);             curvesRef.current             = curves
   const vehiclesRef           = useRef(vehicles);           vehiclesRef.current           = vehicles
   const maxWheelbaseRef       = useRef(maxWheelbase);       maxWheelbaseRef.current       = maxWheelbase
+  const axleSpacingsRef       = useRef(axleSpacings);       axleSpacingsRef.current       = axleSpacings
   const tangentModeRef        = useRef(tangentMode);        tangentModeRef.current        = tangentMode
   const graphRef              = useRef(graph);              graphRef.current              = graph
   const selectedVehicleIdRef  = useRef(selectedVehicleId);  selectedVehicleIdRef.current  = selectedVehicleId
@@ -566,18 +569,15 @@ export function Canvas({
     if (mode === 'vehicle-start') {
       const hit = findLineHit(mouse)
       if (hit) {
-        const wb       = maxWheelbaseRef.current
-        const lineLen  = getLineLength(hit.line)
-        // Default: 2-axle vehicle dengan spacing = maxWheelbase
-        const axleSpacings = [wb]
-        const validMax = lineLen - wb
-        // Rear axle valid range: [0, lineLength - maxWheelbase]
+        const spacings    = axleSpacingsRef.current
+        const totalSpacing = spacings.reduce((s, v) => s + v, 0)
+        const validMax    = getLineLength(hit.line) - totalSpacing
         if (validMax > 0 && hit.offset >= 0 && hit.offset <= validMax) {
-          const axleStates = calculateInitialAxlePositions(hit.line.id, hit.offset, axleSpacings, hit.line)
+          const axleStates = calculateInitialAxlePositions(hit.line.id, hit.offset, spacings, hit.line)
           setVehicleHover({
             lineId: hit.line.id,
             axles: axleStates.map(a => ({ offset: a.absoluteOffset, position: a.position })),
-            axleSpacings,
+            axleSpacings: spacings,
           })
         } else {
           setVehicleHover(null)

@@ -18,6 +18,18 @@ export default function App() {
   const [animatingVehicleId, setAnimatingVehicleId] = useState<string | null>(null)
   const [vehicleOriginId, setVehicleOriginId] = useState<string | null>(null)
   const [vehicleSpeed, setVehicleSpeed] = useState(80)
+  const [axleCount, setAxleCount] = useState(2)
+  const [axleSpacings, setAxleSpacings] = useState<number[]>([40])
+
+  function handleAxleCountChange(count: number) {
+    setAxleCount(count)
+    setAxleSpacings(prev => {
+      const needed = count - 1
+      if (prev.length === needed) return prev
+      if (prev.length > needed) return prev.slice(0, needed)
+      return [...prev, ...Array(needed - prev.length).fill(40)]
+    })
+  }
 
   // ── Animation refs ──────────────────────────────────────────────────────────
   const rafRef           = useRef<number | null>(null)
@@ -268,6 +280,7 @@ export default function App() {
           vehicles={vehicles}
           mode={mode}
           maxWheelbase={maxWheelbase}
+          axleSpacings={axleSpacings}
           tangentMode={tangentMode}
           graph={graph}
           selectedVehicleId={selectedVehicleId}
@@ -307,6 +320,10 @@ export default function App() {
         onVehicleReset={handleVehicleReset}
         onVehicleSpeedChange={setVehicleSpeed}
         onCopySnapshot={handleCopySnapshot}
+        axleCount={axleCount}
+        axleSpacings={axleSpacings}
+        onAxleCountChange={handleAxleCountChange}
+        onAxleSpacingsChange={setAxleSpacings}
       />
     </div>
   )

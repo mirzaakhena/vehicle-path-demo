@@ -4,6 +4,10 @@ import type { Mode, TangentMode, PlacedVehicle, VehicleEndPoint } from '../types
 interface Props {
   mode: Mode
   maxWheelbase: number
+  axleCount: number
+  axleSpacings: number[]
+  onAxleCountChange: (count: number) => void
+  onAxleSpacingsChange: (spacings: number[]) => void
   tangentMode: TangentMode
   lineCount: number
   curveCount: number
@@ -28,6 +32,10 @@ interface Props {
 export function Panel({
   mode,
   maxWheelbase,
+  axleCount,
+  axleSpacings,
+  onAxleCountChange,
+  onAxleSpacingsChange,
   tangentMode,
   lineCount,
   curveCount,
@@ -209,6 +217,68 @@ export function Panel({
               <Muted>10px/s</Muted><Muted>300px/s</Muted>
             </div>
           </div>
+
+          {/* Axle Count */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
+              <span style={labelStyle}>Axles</span>
+              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 16, color: '#818cf8', letterSpacing: 1 }}>
+                {axleCount}
+              </span>
+            </div>
+            <div style={{ display: 'flex', gap: 4 }}>
+              {[2, 3, 4, 5].map(n => {
+                const active = axleCount === n
+                return (
+                  <button
+                    key={n}
+                    onClick={() => onAxleCountChange(n)}
+                    style={{
+                      flex: 1,
+                      padding: '8px 4px',
+                      border: `1px solid ${active ? '#818cf8' : '#1c2030'}`,
+                      background: active ? '#818cf815' : 'transparent',
+                      color: active ? '#a5b4fc' : '#5a6e88',
+                      fontFamily: "'JetBrains Mono', monospace",
+                      fontSize: 12,
+                      cursor: 'pointer',
+                      transition: 'all 0.12s ease',
+                      outline: 'none',
+                    }}
+                  >
+                    {n}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Per-axle Spacing Sliders */}
+          {axleSpacings.map((spacing, i) => (
+            <div key={i} style={{ marginBottom: 12 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+                <span style={labelStyle}>Spacing {i + 1}–{i + 2}</span>
+                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, color: '#818cf8', letterSpacing: 1 }}>
+                  {spacing}<span style={{ fontSize: 11, color: '#4a5878', marginLeft: 3 }}>px</span>
+                </span>
+              </div>
+              <input
+                type="range"
+                min={5}
+                max={200}
+                step={1}
+                value={spacing}
+                onChange={e => {
+                  const next = [...axleSpacings]
+                  next[i] = Number(e.target.value)
+                  onAxleSpacingsChange(next)
+                }}
+              />
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
+                <Muted>5px</Muted><Muted>200px</Muted>
+              </div>
+            </div>
+          ))}
 
           <VehicleList
             vehicles={vehicles}
