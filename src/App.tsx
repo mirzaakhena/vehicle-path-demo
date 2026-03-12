@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import type { Line } from 'vehicle-path2/core'
-import { buildGraph, createBezierCurve, serializeScene, getPositionFromOffset, calculateInitialAxlePositions, PathEngine } from 'vehicle-path2/core'
-import type { VehiclePathState, PathExecution } from 'vehicle-path2/core'
+import { buildGraph, createBezierCurve, serializeScene, getPositionFromOffset, calculateInitialAxlePositions, PathEngine, moveVehicleWithAcceleration } from 'vehicle-path2/core'
+import type { VehiclePathState, PathExecution, AccelerationConfig, AccelerationState } from 'vehicle-path2/core'
 import type { Mode, StoredCurve, TangentMode, PlacedVehicle, VehicleEndPoint } from './types'
 import { Canvas } from './components/Canvas'
 import { Panel } from './components/Panel'
@@ -22,7 +22,7 @@ export default function App() {
   // ── Animation refs ──────────────────────────────────────────────────────────
   const rafRef           = useRef<number | null>(null)
   const engineRef        = useRef<PathEngine | null>(null)
-  const animStateRef     = useRef<{ vehicleId: string; state: VehiclePathState; exec: PathExecution } | null>(null)
+  const animStateRef     = useRef<{ vehicleId: string; state: VehiclePathState; exec: PathExecution; accelState: AccelerationState } | null>(null)
   const vehicleOriginRef = useRef<PlacedVehicle | null>(null)
   const lastTimestampRef = useRef<number | null>(null)
   const vehicleSpeedRef  = useRef(vehicleSpeed); vehicleSpeedRef.current = vehicleSpeed
@@ -173,7 +173,7 @@ export default function App() {
     if (!exec) return
 
     vehicleOriginRef.current = vehicle
-    animStateRef.current = { vehicleId, state, exec }
+    animStateRef.current = { vehicleId, state, exec, accelState: { currentSpeed: 0 } }
     lastTimestampRef.current = null
     setVehicleOriginId(vehicleId)
     setAnimatingVehicleId(vehicleId)
@@ -211,8 +211,15 @@ export default function App() {
       }
 
       const deltaTime = Math.min((timestamp - last) / 1000, 0.1)
-      const result = engine.moveVehicle(anim.state, anim.exec, vehicleSpeedRef.current * deltaTime)
-      animStateRef.current = { ...anim, state: result.state, exec: result.execution }
+      const linesMap = new Map(engine.lines.map(l => [l.id, l]))
+      const accelConfig: AccelerationConfig = {
+        acceleration: vehicleSpeedRef.current * 0.3,
+        deceleration: vehicleSpeedRef.current * 0.2,
+        maxSpeed: vehicleSpeedRef.current,
+        minCurveSpeed: Math.max(10, vehicleSpeedRef.current * 0.3),
+      }
+      const result = moveVehicleWithAcceleration(anim.state, anim.exec, anim.accelState, accelConfig, deltaTime, linesMap)
+      animStateRef.current = { ...anim, state: result.state, exec: result.execution, accelState: result.accelState }
 
       setVehicles(prev => prev.map(v =>
         v.id === anim.vehicleId
