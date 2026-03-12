@@ -153,6 +153,16 @@ export default function App() {
     }))
   }
 
+  function handleVehicleRemove(vehicleId: string) {
+    setVehicles(prev => prev.filter(v => v.id !== vehicleId))
+    setVehicleEndPoints(prev => {
+      const next = { ...prev }
+      delete next[vehicleId]
+      return next
+    })
+    setSelectedVehicleId(prev => prev === vehicleId ? null : prev)
+  }
+
   function handleVehicleEndDelete(vehicleId: string) {
     setVehicleEndPoints(prev => {
       const next = { ...prev }
@@ -316,6 +326,7 @@ export default function App() {
         vehicleSpeed={vehicleSpeed}
         onVehicleSelect={handleVehicleSelect}
         onVehicleEndDelete={handleVehicleEndDelete}
+        onVehicleRemove={handleVehicleRemove}
         onVehiclePlay={handleVehiclePlay}
         onVehicleReset={handleVehicleReset}
         onVehicleSpeedChange={setVehicleSpeed}

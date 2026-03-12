@@ -23,6 +23,7 @@ interface Props {
   onTangentModeChange: (t: TangentMode) => void
   onVehicleSelect: (id: string | null) => void
   onVehicleEndDelete: (vehicleId: string) => void
+  onVehicleRemove: (vehicleId: string) => void
   onVehiclePlay: (id: string) => void
   onVehicleReset: (id: string) => void
   onVehicleSpeedChange: (speed: number) => void
@@ -51,6 +52,7 @@ export function Panel({
   onTangentModeChange,
   onVehicleSelect,
   onVehicleEndDelete,
+  onVehicleRemove,
   onVehiclePlay,
   onVehicleReset,
   onVehicleSpeedChange,
@@ -290,6 +292,7 @@ export function Panel({
             onDeleteEnd={onVehicleEndDelete}
             onPlay={onVehiclePlay}
             onReset={onVehicleReset}
+            onRemove={onVehicleRemove}
           />
         </section>
 
@@ -476,6 +479,7 @@ function VehicleList({
   onDeleteEnd,
   onPlay,
   onReset,
+  onRemove,
 }: {
   vehicles: PlacedVehicle[]
   vehicleEndPoints: Record<string, VehicleEndPoint>
@@ -486,6 +490,7 @@ function VehicleList({
   onDeleteEnd: (id: string) => void
   onPlay: (id: string) => void
   onReset: (id: string) => void
+  onRemove: (id: string) => void
 }) {
   if (vehicles.length === 0) {
     return <Muted>No vehicles placed</Muted>
@@ -519,9 +524,17 @@ function VehicleList({
           >
             {/* Header row: V label + status + play/reset */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: isAnimating ? '#4ade80' : selected ? '#fb923c' : '#8899aa', letterSpacing: 1 }}>
-                V{i + 1}
-              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <button
+                  onClick={e => { e.stopPropagation(); onRemove(v.id) }}
+                  disabled={isLocked}
+                  style={iconButtonStyle('#ef4444')}
+                  title="Remove vehicle"
+                >×</button>
+                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: isAnimating ? '#4ade80' : selected ? '#fb923c' : '#8899aa', letterSpacing: 1 }}>
+                  V{i + 1}
+                </span>
+              </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                 {isAnimating && (
                   <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: '#4ade80', opacity: 0.8, letterSpacing: 1 }}>
