@@ -3,7 +3,6 @@ import type { Mode, TangentMode, PlacedVehicle, VehicleEndPoint } from '../types
 
 interface Props {
   mode: Mode
-  maxWheelbase: number
   axleCount: number
   axleSpacings: number[]
   onAxleCountChange: (count: number) => void
@@ -19,7 +18,6 @@ interface Props {
   vehicleSpeed: number
   graphNodeCount: number
   onModeChange: (m: Mode) => void
-  onMaxWheelbaseChange: (v: number) => void
   onTangentModeChange: (t: TangentMode) => void
   onVehicleSelect: (id: string | null) => void
   onVehicleEndDelete: (vehicleId: string) => void
@@ -32,7 +30,6 @@ interface Props {
 
 export function Panel({
   mode,
-  maxWheelbase,
   axleCount,
   axleSpacings,
   onAxleCountChange,
@@ -48,7 +45,6 @@ export function Panel({
   vehicleSpeed,
   graphNodeCount,
   onModeChange,
-  onMaxWheelbaseChange,
   onTangentModeChange,
   onVehicleSelect,
   onVehicleEndDelete,
@@ -187,20 +183,6 @@ export function Panel({
                 </button>
               )
             })}
-          </div>
-
-          <div style={{ marginBottom: 16 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
-              <span style={labelStyle}>Max Wheelbase</span>
-              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 16, color: '#4ade80', letterSpacing: 1 }}>
-                {maxWheelbase}<span style={{ fontSize: 11, color: '#4a5878', marginLeft: 3 }}>px</span>
-              </span>
-            </div>
-            <input type="range" min={5} max={200} step={1} value={maxWheelbase}
-              onChange={e => onMaxWheelbaseChange(Number(e.target.value))} />
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
-              <Muted>5px</Muted><Muted>200px</Muted>
-            </div>
           </div>
 
           {/* Speed slider */}

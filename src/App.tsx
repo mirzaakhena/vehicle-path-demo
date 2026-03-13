@@ -11,7 +11,6 @@ export default function App() {
   const [curves, setCurves] = useState<StoredCurve[]>([])
   const [vehicles, setVehicles] = useState<PlacedVehicle[]>([])
   const [mode, setMode] = useState<Mode>('drag')
-  const [maxWheelbase, setMaxWheelbase] = useState(10)
   const [tangentMode, setTangentMode] = useState<TangentMode>('proportional-40')
   const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null)
   const [vehicleEndPoints, setVehicleEndPoints] = useState<Record<string, VehicleEndPoint>>({})
@@ -52,9 +51,9 @@ export default function App() {
           toOffset: c.toOffset,
           toIsPercentage: false,
         })),
-        { maxWheelbase, tangentMode }
+        { tangentMode }
       ),
-    [lines, curves, maxWheelbase, tangentMode]
+    [lines, curves, tangentMode]
   )
 
   /**
@@ -81,8 +80,7 @@ export default function App() {
         const bezier = createBezierCurve(
           fromLine,
           toLine,
-          { maxWheelbase, tangentMode },
-          false,
+          { tangentMode },
           {
             fromOffset: curve.fromOffset,
             fromIsPercentage: false,
@@ -176,7 +174,7 @@ export default function App() {
     const endPoint = vehicleEndPoints[vehicleId]
     if (!vehicle || !endPoint) return
 
-    const engine = new PathEngine({ maxWheelbase, tangentMode })
+    const engine = new PathEngine({ tangentMode })
     engine.setScene(lines, curves.map(c => ({
       fromLineId: c.fromLineId,
       toLineId: c.toLineId,
@@ -289,7 +287,6 @@ export default function App() {
           curves={curves}
           vehicles={vehicles}
           mode={mode}
-          maxWheelbase={maxWheelbase}
           axleSpacings={axleSpacings}
           tangentMode={tangentMode}
           graph={graph}
@@ -310,7 +307,6 @@ export default function App() {
       {/* Panel — 1/4 width */}
       <Panel
         mode={mode}
-        maxWheelbase={maxWheelbase}
         tangentMode={tangentMode}
         lineCount={lines.length}
         curveCount={curves.length}
@@ -319,7 +315,6 @@ export default function App() {
         selectedVehicleId={selectedVehicleId}
         graphNodeCount={graph.adjacency.size}
         onModeChange={setMode}
-        onMaxWheelbaseChange={setMaxWheelbase}
         onTangentModeChange={setTangentMode}
         animatingVehicleId={animatingVehicleId}
         vehicleOriginId={vehicleOriginId}

@@ -69,7 +69,6 @@ interface Props {
   curves: StoredCurve[]
   vehicles: PlacedVehicle[]
   mode: Mode
-  maxWheelbase: number
   axleSpacings: number[]
   tangentMode: TangentMode
   graph: Graph
@@ -147,7 +146,6 @@ export function Canvas({
   curves,
   vehicles,
   mode,
-  maxWheelbase,
   axleSpacings,
   tangentMode,
   graph,
@@ -169,7 +167,6 @@ export function Canvas({
   const linesRef              = useRef(lines);              linesRef.current              = lines
   const curvesRef             = useRef(curves);             curvesRef.current             = curves
   const vehiclesRef           = useRef(vehicles);           vehiclesRef.current           = vehicles
-  const maxWheelbaseRef       = useRef(maxWheelbase);       maxWheelbaseRef.current       = maxWheelbase
   const axleSpacingsRef       = useRef(axleSpacings);       axleSpacingsRef.current       = axleSpacings
   const tangentModeRef        = useRef(tangentMode);        tangentModeRef.current        = tangentMode
   const graphRef              = useRef(graph);              graphRef.current              = graph
@@ -402,7 +399,6 @@ export function Canvas({
     // ── Drag mode ──
     if (mode === 'drag') {
       if (activeDrag) {
-        const wb = maxWheelbaseRef.current
         const tm = tangentModeRef.current
 
         if (activeDrag.type === 'line-start') {
@@ -436,8 +432,7 @@ export function Canvas({
           try {
             const bezier = createBezierCurve(
               fromLine, toLine,
-              { maxWheelbase: wb, tangentMode: tm },
-              false,
+              { tangentMode: tm },
               { fromOffset: clamped, fromIsPercentage: false, toOffset: curve.toOffset, toIsPercentage: false }
             )
             onCurveUpdate({ ...curve, fromOffset: clamped, bezier })
@@ -453,8 +448,7 @@ export function Canvas({
           try {
             const bezier = createBezierCurve(
               fromLine, toLine,
-              { maxWheelbase: wb, tangentMode: tm },
-              false,
+              { tangentMode: tm },
               { fromOffset: curve.fromOffset, fromIsPercentage: false, toOffset: clamped, toIsPercentage: false }
             )
             onCurveUpdate({ ...curve, toOffset: clamped, bezier })
@@ -591,7 +585,6 @@ export function Canvas({
     // ── Curve mode ──
     if (mode === 'curve') {
       if (curveDrag) {
-        const wb = maxWheelbaseRef.current
         const tm = tangentModeRef.current
         const hit = findLineHit(mouse, curveDrag.fromLineId)
 
@@ -602,8 +595,7 @@ export function Canvas({
             try {
               const bezier = createBezierCurve(
                 fromLine, hit.line,
-                { maxWheelbase: wb, tangentMode: tm },
-                false,
+                { tangentMode: tm },
                 { fromOffset: curveDrag.fromOffset, fromIsPercentage: false, toOffset: hit.offset, toIsPercentage: false }
               )
               setCurveDrag(prev =>
