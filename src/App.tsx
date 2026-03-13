@@ -132,6 +132,107 @@ export default function App() {
     setCurves(prev => prev.map(c => (c.id === updatedCurve.id ? updatedCurve : c)))
   }
 
+  function handleLineEdit(oldId: string, updatedLine: Line) {
+    const isRename = oldId !== updatedLine.id
+
+    // 1. Build updated lines (lookup by oldId)
+    const updatedLines = lines.map(l => l.id === oldId ? updatedLine : l)
+
+    // 2. Build updated curves: rename refs + recompute bezier for connected curves
+    const updatedCurves = curves.map(curve => {
+      const renamedCurve = isRename ? {
+        ...curve,
+        fromLineId: curve.fromLineId === oldId ? updatedLine.id : curve.fromLineId,
+        toLineId:   curve.toLineId   === oldId ? updatedLine.id : curve.toLineId,
+      } : curve
+
+      const connected = renamedCurve.fromLineId === updatedLine.id || renamedCurve.toLineId === updatedLine.id
+      if (!connected) return renamedCurve
+
+      const fromLine = renamedCurve.fromLineId === updatedLine.id
+        ? updatedLine
+        : updatedLines.find(l => l.id === renamedCurve.fromLineId)
+      const toLine = renamedCurve.toLineId === updatedLine.id
+        ? updatedLine
+        : updatedLines.find(l => l.id === renamedCurve.toLineId)
+      if (!fromLine || !toLine) return renamedCurve
+      try {
+        const bezier = createBezierCurve(fromLine, toLine, { tangentMode }, {
+          fromOffset: renamedCurve.fromOffset, fromIsPercentage: false,
+          toOffset: renamedCurve.toOffset, toIsPercentage: false,
+        })
+        return { ...renamedCurve, bezier }
+      } catch { return renamedCurve }
+    })
+
+    // 3. Build updated vehicles: rename lineId refs + recalculate positions
+    const updatedVehicles = vehicles.map(v => ({
+      ...v,
+      axles: v.axles.map(a => {
+        const targetLineId = isRename && a.lineId === oldId ? updatedLine.id : a.lineId
+        if (targetLineId !== updatedLine.id) return { ...a, lineId: targetLineId }
+        return { ...a, lineId: targetLineId, position: getPositionFromOffset(updatedLine, a.offset) }
+      }),
+    }))
+
+    // 4. Build updated vehicleEndPoints: rename lineId + axle lineIds + recalculate
+    const updatedEndPoints: Record<string, VehicleEndPoint> = {}
+    for (const [vId, ep] of Object.entries(vehicleEndPoints)) {
+      const epLineId = isRename && ep.lineId === oldId ? updatedLine.id : ep.lineId
+      if (epLineId === updatedLine.id) {
+        const vehicle = updatedVehicles.find(v => v.id === vId)
+        if (!vehicle) { updatedEndPoints[vId] = { ...ep, lineId: epLineId }; continue }
+        const axleStates = calculateInitialAxlePositions(epLineId, ep.offset, vehicle.axleSpacings, updatedLine)
+        updatedEndPoints[vId] = {
+          ...ep,
+          lineId: epLineId,
+          axles: axleStates.map(a => ({ offset: a.absoluteOffset, position: a.position })),
+        }
+      } else {
+        updatedEndPoints[vId] = { ...ep, lineId: epLineId }
+      }
+    }
+
+    setLines(updatedLines)
+    setCurves(updatedCurves)
+    setVehicles(updatedVehicles)
+    setVehicleEndPoints(updatedEndPoints)
+  }
+
+  function handleLineDelete(lineId: string) {
+    setLines(prev => prev.filter(l => l.id !== lineId))
+    setCurves(prev => prev.filter(c => c.fromLineId !== lineId && c.toLineId !== lineId))
+    // Hapus vehicles yang salah satu axle-nya berada di line ini
+    setVehicles(prev => prev.filter(v => !v.axles.some(a => a.lineId === lineId)))
+    setVehicleEndPoints(prev => {
+      const next = { ...prev }
+      for (const [vId, ep] of Object.entries(next)) {
+        if (ep.lineId === lineId) delete next[vId]
+      }
+      return next
+    })
+  }
+
+  function handleCurveOffsetChange(curveId: string, fromOffset: number, toOffset: number) {
+    const curve = curves.find(c => c.id === curveId)
+    if (!curve) return
+    const fromLine = lines.find(l => l.id === curve.fromLineId)
+    const toLine   = lines.find(l => l.id === curve.toLineId)
+    if (!fromLine || !toLine) return
+    try {
+      const bezier = createBezierCurve(
+        fromLine, toLine,
+        { tangentMode },
+        { fromOffset, fromIsPercentage: false, toOffset, toIsPercentage: false }
+      )
+      setCurves(prev => prev.map(c => c.id === curveId ? { ...c, fromOffset, toOffset, bezier } : c))
+    } catch { /* degenerate geometry — skip */ }
+  }
+
+  function handleCurveDelete(curveId: string) {
+    setCurves(prev => prev.filter(c => c.id !== curveId))
+  }
+
   function handleVehicleSelect(id: string | null) {
     setSelectedVehicleId(id)
   }
@@ -308,8 +409,8 @@ export default function App() {
       <Panel
         mode={mode}
         tangentMode={tangentMode}
-        lineCount={lines.length}
-        curveCount={curves.length}
+        lines={lines}
+        curves={curves}
         vehicles={vehicles}
         vehicleEndPoints={vehicleEndPoints}
         selectedVehicleId={selectedVehicleId}
@@ -330,6 +431,10 @@ export default function App() {
         axleSpacings={axleSpacings}
         onAxleCountChange={handleAxleCountChange}
         onAxleSpacingsChange={setAxleSpacings}
+        onLineEdit={handleLineEdit}
+        onLineDelete={handleLineDelete}
+        onCurveOffsetChange={handleCurveOffsetChange}
+        onCurveDelete={handleCurveDelete}
       />
     </div>
   )
