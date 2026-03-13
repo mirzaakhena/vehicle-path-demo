@@ -639,7 +639,7 @@ export function Canvas({
     if (mode === 'line' && lineDrawing) {
       const dx = lineDrawing.current.x - lineDrawing.start.x
       const dy = lineDrawing.current.y - lineDrawing.start.y
-      if (Math.sqrt(dx * dx + dy * dy) > 5) {
+      if (Math.sqrt(dx * dx + dy * dy) > 30) {
         onLineAdd({ id: nextLineId(), start: lineDrawing.start, end: lineDrawing.current })
       }
       setLineDrawing(null)

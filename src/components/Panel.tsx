@@ -216,6 +216,22 @@ export function Panel({
               <SectionLabel>Curves ({curves.length})</SectionLabel>
               <CurveList curves={curves} onOffsetChange={onCurveOffsetChange} onDelete={onCurveDelete} />
             </section>
+
+            <section>
+              <button onClick={handleCopy} style={{
+                width: '100%', padding: '10px 12px',
+                border: `1px solid ${copied ? '#4ade80' : '#1c2030'}`,
+                background: copied ? '#4ade8015' : 'transparent',
+                color: copied ? '#4ade80' : '#5a6e88',
+                fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: 1.5,
+                textTransform: 'uppercase', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                transition: 'all 0.15s ease', outline: 'none',
+              }}>
+                <span style={{ fontSize: 14 }}>{copied ? '✓' : '⎘'}</span>
+                {copied ? 'Copied!' : 'Copy Snapshot'}
+              </button>
+            </section>
           </>
         )}
 
@@ -324,22 +340,6 @@ export function Panel({
             <div style={{ height: 1, background: '#1c2030', margin: '2px 0' }} />
             <StatRow label="Graph nodes" value={graphNodeCount} highlight={graphNodeCount > 0} />
           </div>
-        </section>
-
-        <section>
-          <button onClick={handleCopy} style={{
-            width: '100%', padding: '10px 12px',
-            border: `1px solid ${copied ? '#4ade80' : '#1c2030'}`,
-            background: copied ? '#4ade8015' : 'transparent',
-            color: copied ? '#4ade80' : '#5a6e88',
-            fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: 1.5,
-            textTransform: 'uppercase', cursor: 'pointer',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-            transition: 'all 0.15s ease', outline: 'none',
-          }}>
-            <span style={{ fontSize: 14 }}>{copied ? '✓' : '⎘'}</span>
-            {copied ? 'Copied!' : 'Copy Snapshot'}
-          </button>
         </section>
 
         <section style={{ marginTop: 'auto' }}>
