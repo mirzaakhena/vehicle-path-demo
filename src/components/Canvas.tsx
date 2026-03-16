@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
-import type { Line, Point, BezierCurve, TangentMode, Graph, Curve } from 'vehicle-path2/core'
-import { createBezierCurve, getLineLength, distance as libDistance, calculateInitialAxlePositions, findPath, projectPointOnLine, getPositionFromOffset, computeMinLineLength, getValidRearOffsetRange } from 'vehicle-path2/core'
+import type { Line, Point, BezierCurve, TangentMode, Curve } from 'vehicle-path2/core'
+import { createBezierCurve, getLineLength, distance as libDistance, calculateInitialAxlePositions, projectPointOnLine, getPositionFromOffset, computeMinLineLength, getValidRearOffsetRange } from 'vehicle-path2/core'
 import type { Mode, StoredCurve, PlacedVehicle, VehicleEndPoint } from '../types'
 
 // ─── Hit detection radii ─────────────────────────────────────────────────────
@@ -71,7 +71,7 @@ interface Props {
   mode: Mode
   axleSpacings: number[]
   tangentMode: TangentMode
-  graph: Graph
+  canReach: (fromLineId: string, fromOffset: number, toLineId: string, toOffset: number) => boolean
   selectedVehicleId: string | null
   vehicleEndPoints: Record<string, VehicleEndPoint>
   onLineAdd: (line: Line) => void
@@ -148,7 +148,7 @@ export function Canvas({
   mode,
   axleSpacings,
   tangentMode,
-  graph,
+  canReach,
   selectedVehicleId,
   vehicleEndPoints,
   onLineAdd,
@@ -169,7 +169,7 @@ export function Canvas({
   const vehiclesRef           = useRef(vehicles);           vehiclesRef.current           = vehicles
   const axleSpacingsRef       = useRef(axleSpacings);       axleSpacingsRef.current       = axleSpacings
   const tangentModeRef        = useRef(tangentMode);        tangentModeRef.current        = tangentMode
-  const graphRef              = useRef(graph);              graphRef.current              = graph
+  const canReachRef           = useRef(canReach);           canReachRef.current           = canReach
   const selectedVehicleIdRef  = useRef(selectedVehicleId);  selectedVehicleIdRef.current  = selectedVehicleId
   const vehicleEndPointsRef   = useRef(vehicleEndPoints);   vehicleEndPointsRef.current   = vehicleEndPoints
 
@@ -480,18 +480,13 @@ export function Canvas({
             }
             const frontEndOffset = rearOffset + (lineLen - maxOffset)
             const front = vehicle.axles[0]
-            const path = findPath(
-              graphRef.current,
-              { lineId: front.lineId, offset: front.offset },
-              hit.line.id,
-              frontEndOffset
-            )
+            const isValid = canReachRef.current(front.lineId, front.offset, hit.line.id, frontEndOffset)
             const axleStates = calculateInitialAxlePositions(hit.line.id, rearOffset, vehicle.axleSpacings, hit.line)
             setVehicleEndHover({
               lineId: hit.line.id,
               offset: rearOffset,
               axles: axleStates.map(a => ({ offset: a.absoluteOffset, position: a.position })),
-              isValid: path !== null,
+              isValid,
             })
           } else {
             setVehicleEndHover(null)
@@ -540,18 +535,13 @@ export function Canvas({
         }
         const frontEndOffset = rearOffset + (lineLen - maxOffset)
         const front = vehicle.axles[0]
-        const path = findPath(
-          graphRef.current,
-          { lineId: front.lineId, offset: front.offset },
-          hit.line.id,
-          frontEndOffset
-        )
+        const isValid = canReachRef.current(front.lineId, front.offset, hit.line.id, frontEndOffset)
         const axleStates = calculateInitialAxlePositions(hit.line.id, rearOffset, vehicle.axleSpacings, hit.line)
         setVehicleEndHover({
           lineId: hit.line.id,
           offset: rearOffset,
           axles: axleStates.map(a => ({ offset: a.absoluteOffset, position: a.position })),
-          isValid: path !== null,
+          isValid,
         })
       } else {
         setVehicleEndHover(null)

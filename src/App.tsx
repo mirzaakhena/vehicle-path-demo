@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import type { Line } from 'vehicle-path2/core'
-import { buildGraph, createBezierCurve, serializeScene, getPositionFromOffset, calculateInitialAxlePositions, PathEngine, moveVehicleWithAcceleration } from 'vehicle-path2/core'
+import { createBezierCurve, serializeScene, getPositionFromOffset, calculateInitialAxlePositions, PathEngine } from 'vehicle-path2/core'
 import type { VehiclePathState, PathExecution, AccelerationConfig, AccelerationState } from 'vehicle-path2/core'
 import type { Mode, StoredCurve, TangentMode, PlacedVehicle, VehicleEndPoint } from './types'
 import { Canvas } from './components/Canvas'
@@ -38,23 +38,23 @@ export default function App() {
   const lastTimestampRef = useRef<number | null>(null)
   const vehicleSpeedRef  = useRef(vehicleSpeed); vehicleSpeedRef.current = vehicleSpeed
 
-  // Keep the graph up-to-date as scene changes — maximizing library usage
-  const graph = useMemo(
-    () =>
-      buildGraph(
-        lines,
-        curves.map(c => ({
-          fromLineId: c.fromLineId,
-          toLineId: c.toLineId,
-          fromOffset: c.fromOffset,
-          fromIsPercentage: false,
-          toOffset: c.toOffset,
-          toIsPercentage: false,
-        })),
-        { tangentMode }
-      ),
-    [lines, curves, tangentMode]
-  )
+  // Persistent PathEngine — single source of truth for scene graph
+  const engine = useMemo(() => {
+    const e = new PathEngine({ tangentMode })
+    e.setScene(lines, curves.map(c => ({
+      id: c.id,
+      fromLineId: c.fromLineId,
+      toLineId: c.toLineId,
+      fromOffset: c.fromOffset,
+      fromIsPercentage: false,
+      toOffset: c.toOffset,
+      toIsPercentage: false,
+    })))
+    return e
+  }, [lines, curves, tangentMode])
+  const graph = engine.getGraph()
+  // Keep engine ref fresh for animation loop
+  engineRef.current = engine
 
   /**
    * Update a line and cascade-recompute all bezier curves that reference it.
@@ -273,24 +273,13 @@ export default function App() {
   function handleVehiclePlay(vehicleId: string) {
     const vehicle = vehicles.find(v => v.id === vehicleId)
     const endPoint = vehicleEndPoints[vehicleId]
-    if (!vehicle || !endPoint) return
-
-    const engine = new PathEngine({ tangentMode })
-    engine.setScene(lines, curves.map(c => ({
-      fromLineId: c.fromLineId,
-      toLineId: c.toLineId,
-      fromOffset: c.fromOffset,
-      fromIsPercentage: false,
-      toOffset: c.toOffset,
-      toIsPercentage: false,
-    })))
-    engineRef.current = engine
+    if (!vehicle || !endPoint || !engineRef.current) return
 
     const rearAxle = vehicle.axles[vehicle.axles.length - 1]
-    const state = engine.initializeVehicle(rearAxle.lineId, rearAxle.offset, vehicle)
+    const state = engineRef.current.initializeVehicle(rearAxle.lineId, rearAxle.offset, vehicle)
     if (!state) return
 
-    const exec = engine.preparePath(state, endPoint.lineId, endPoint.offset)
+    const exec = engineRef.current.preparePath(state, endPoint.lineId, endPoint.offset)
     if (!exec) return
 
     vehicleOriginRef.current = vehicle
@@ -332,14 +321,13 @@ export default function App() {
       }
 
       const deltaTime = Math.min((timestamp - last) / 1000, 0.1)
-      const linesMap = new Map(engine.lines.map(l => [l.id, l]))
       const accelConfig: AccelerationConfig = {
         acceleration: vehicleSpeedRef.current * 0.3,
         deceleration: vehicleSpeedRef.current * 0.2,
         maxSpeed: vehicleSpeedRef.current,
         minCurveSpeed: Math.max(10, vehicleSpeedRef.current * 0.3),
       }
-      const result = moveVehicleWithAcceleration(anim.state, anim.exec, anim.accelState, accelConfig, deltaTime, linesMap)
+      const result = engine.moveVehicleWithAcceleration(anim.state, anim.exec, anim.accelState, accelConfig, deltaTime)
       animStateRef.current = { ...anim, state: result.state, exec: result.execution, accelState: result.accelState }
 
       setVehicles(prev => prev.map(v =>
@@ -390,7 +378,7 @@ export default function App() {
           mode={mode}
           axleSpacings={axleSpacings}
           tangentMode={tangentMode}
-          graph={graph}
+          canReach={(from, fromOff, to, toOff) => engine.canReach(from, fromOff, to, toOff)}
           selectedVehicleId={selectedVehicleId}
           vehicleEndPoints={vehicleEndPoints}
           onLineAdd={line => setLines(prev => [...prev, line])}
